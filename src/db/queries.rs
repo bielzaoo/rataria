@@ -1,4 +1,4 @@
-use crate::db::models::{Engagement, NewEngagement};
+use crate::db::models::{Engagement, NewEngagement, NewTarget, Target};
 use crate::db::Database;
 use crate::error::{RatariaError, Result};
 use chrono::Utc;
@@ -119,6 +119,88 @@ pub fn delete_engagement(db: &Database, id: &str) -> Result<()> {
         return Err(RatariaError::NotFound(
             "Engagement não encontrado".to_string(),
         ));
+    }
+
+    Ok(())
+}
+
+// ─── Targets ─────────────────────────────────────────────────────────────────
+
+// ─── Targets ─────────────────────────────────────────────────────────────────
+
+pub fn create_target(db: &Database, new: NewTarget) -> Result<Target> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().naive_utc();
+
+    db.conn.execute(
+        "INSERT INTO targets (id, engagement_id, domain, created_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![id, new.engagement_id, new.domain, now.to_string()],
+    )?;
+
+    Ok(Target {
+        id,
+        engagement_id: new.engagement_id,
+        domain: new.domain,
+        created_at: now,
+    })
+}
+
+pub fn list_targets(db: &Database, engagement_id: &str) -> Result<Vec<Target>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, engagement_id, domain, created_at
+         FROM targets WHERE engagement_id = ?1 ORDER BY created_at ASC",
+    )?;
+
+    let targets = stmt
+        .query_map([engagement_id], |row| {
+            let created_str: String = row.get(3)?;
+            Ok(Target {
+                id: row.get(0)?,
+                engagement_id: row.get(1)?,
+                domain: row.get(2)?,
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(targets)
+}
+
+pub fn get_target(db: &Database, id: &str) -> Result<Option<Target>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, engagement_id, domain, created_at
+         FROM targets WHERE id = ?1",
+    )?;
+
+    let mut rows = stmt.query_map([id], |row| {
+        let created_str: String = row.get(3)?;
+        Ok(Target {
+            id: row.get(0)?,
+            engagement_id: row.get(1)?,
+            domain: row.get(2)?,
+            created_at: chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S%.f")
+                .unwrap_or_default(),
+        })
+    })?;
+
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
+pub fn delete_target(db: &Database, id: &str) -> Result<()> {
+    let rows_affected = db
+        .conn
+        .execute("DELETE FROM targets WHERE id = ?1", rusqlite::params![id])?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("Target não encontrado".to_string()));
     }
 
     Ok(())
@@ -275,5 +357,200 @@ mod tests {
         );
 
         assert!(resultado.is_err());
+    }
+
+    // ─── Testes de Target ─────────────────────────────────────────────────────
+
+    fn create_test_engagement(db: &Database) -> Engagement {
+        create_engagement(
+            db,
+            NewEngagement {
+                name: "Engagement Teste".to_string(),
+                description: None,
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_create_target() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+
+        let target = create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "empresa.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert!(!target.id.is_empty());
+        assert_eq!(target.domain, "empresa.com");
+        assert_eq!(target.engagement_id, eng.id);
+    }
+
+    #[test]
+    fn test_list_targets_vazio() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+
+        let lista = list_targets(&db, &eng.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_list_targets() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+
+        create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "empresa.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "subsidiaria.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        let lista = list_targets(&db, &eng.id).unwrap();
+        assert_eq!(lista.len(), 2);
+    }
+
+    #[test]
+    fn test_list_targets_isolado_por_engagement() {
+        let db = setup();
+
+        // Dois engagements distintos
+        let eng1 = create_engagement(
+            &db,
+            NewEngagement {
+                name: "Eng 1".to_string(),
+                description: None,
+            },
+        )
+        .unwrap();
+
+        let eng2 = create_engagement(
+            &db,
+            NewEngagement {
+                name: "Eng 2".to_string(),
+                description: None,
+            },
+        )
+        .unwrap();
+
+        create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng1.id.clone(),
+                domain: "alvo-do-eng1.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng2.id.clone(),
+                domain: "alvo-do-eng2.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        // Cada engagement deve ver apenas seus próprios targets
+        let targets_eng1 = list_targets(&db, &eng1.id).unwrap();
+        let targets_eng2 = list_targets(&db, &eng2.id).unwrap();
+
+        assert_eq!(targets_eng1.len(), 1);
+        assert_eq!(targets_eng2.len(), 1);
+        assert_eq!(targets_eng1[0].domain, "alvo-do-eng1.com");
+        assert_eq!(targets_eng2[0].domain, "alvo-do-eng2.com");
+    }
+
+    #[test]
+    fn test_get_target_existente() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+
+        let criado = create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "alvo.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        let encontrado = get_target(&db, &criado.id).unwrap();
+        assert!(encontrado.is_some());
+        assert_eq!(encontrado.unwrap().domain, "alvo.com");
+    }
+
+    #[test]
+    fn test_get_target_inexistente() {
+        let db = setup();
+        let resultado = get_target(&db, "id-inexistente").unwrap();
+        assert!(resultado.is_none());
+    }
+
+    #[test]
+    fn test_delete_target() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+
+        let criado = create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "deletar.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_target(&db, &criado.id).unwrap();
+
+        let resultado = get_target(&db, &criado.id).unwrap();
+        assert!(resultado.is_none());
+    }
+
+    #[test]
+    fn test_delete_engagement_cascata_targets() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+
+        create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "alvo1.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "alvo2.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        // Deletar o engagement deve deletar os targets por CASCADE
+        delete_engagement(&db, &eng.id).unwrap();
+
+        let lista = list_targets(&db, &eng.id).unwrap();
+        assert!(lista.is_empty());
     }
 }
