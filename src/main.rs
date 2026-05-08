@@ -31,6 +31,8 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::Home => ui::home::draw(f, app),
                 Screen::CreateEngagement => ui::create_engagement::draw(f, app),
                 Screen::ListEngagements => ui::list_engagements::draw(f, app),
+                Screen::Dashboard => ui::list_engagements::draw(f, app), // placeholder
+                Screen::Targets => ui::list_engagements::draw(f, app),   // placeholder
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -53,6 +55,8 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::Home => handle_home(key.code, app),
                     Screen::CreateEngagement => handle_create_engagement(key.code, app)?,
                     Screen::ListEngagements => handle_list_engagements(key.code, app)?,
+                    Screen::Dashboard => {} // placeholder
+                    Screen::Targets => {}   // placeholder
                 }
             }
         }

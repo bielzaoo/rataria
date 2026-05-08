@@ -6,6 +6,8 @@ pub enum Screen {
     Home,
     CreateEngagement,
     ListEngagements,
+    Dashboard,
+    Targets,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +38,17 @@ pub struct App {
     pub engagements: Vec<Engagement>,
     pub engagement_selected: usize,
     pub current_engagement: Option<Engagement>,
+
+    // Estado do dashboard
+    pub dashboard_selected: usize,
+
+    // Estado de targets
+    pub targets: Vec<crate::db::models::Target>,
+    pub target_selected: usize,
+    pub current_target: Option<crate::db::models::Target>,
+
+    // Estado do formulário de target (reutiliza form_name)
+    pub creating_target: bool,
 }
 
 impl App {
@@ -54,6 +67,11 @@ impl App {
             engagements: Vec::new(),
             engagement_selected: 0,
             current_engagement: None,
+            dashboard_selected: 0,
+            targets: Vec::new(),
+            target_selected: 0,
+            current_target: None,
+            creating_target: false,
         }
     }
 
@@ -118,6 +136,54 @@ impl App {
     /// Retorna o engagement atualmente selecionado na lista
     pub fn selected_engagement(&self) -> Option<&Engagement> {
         self.engagements.get(self.engagement_selected)
+    }
+
+    pub fn dashboard_menu_items() -> Vec<&'static str> {
+        vec![
+            "Targets",
+            "Subdomains",
+            "IPs",
+            "ASNs",
+            "URLs",
+            "Technologies",
+            "Screenshots",
+        ]
+    }
+
+    pub fn dashboard_next(&mut self) {
+        let len = Self::dashboard_menu_items().len();
+        self.dashboard_selected = (self.dashboard_selected + 1) % len;
+    }
+
+    pub fn dashboard_previous(&mut self) {
+        let len = Self::dashboard_menu_items().len();
+        if self.dashboard_selected == 0 {
+            self.dashboard_selected = len - 1;
+        } else {
+            self.dashboard_selected -= 1;
+        }
+    }
+
+    pub fn targets_next(&mut self) {
+        if self.targets.is_empty() {
+            return;
+        }
+        self.target_selected = (self.target_selected + 1) % self.targets.len();
+    }
+
+    pub fn targets_previous(&mut self) {
+        if self.targets.is_empty() {
+            return;
+        }
+        if self.target_selected == 0 {
+            self.target_selected = self.targets.len() - 1;
+        } else {
+            self.target_selected -= 1;
+        }
+    }
+
+    pub fn selected_target(&self) -> Option<&crate::db::models::Target> {
+        self.targets.get(self.target_selected)
     }
 }
 
@@ -321,5 +387,156 @@ mod tests {
     fn test_selected_engagement_vazio_retorna_none() {
         let app = App::new();
         assert!(app.selected_engagement().is_none());
+    }
+
+    // ── helpers de target ────────────────────────────────────────────────────
+
+    fn make_target(domain: &str) -> crate::db::models::Target {
+        crate::db::models::Target {
+            id: uuid::Uuid::new_v4().to_string(),
+            engagement_id: uuid::Uuid::new_v4().to_string(),
+            domain: domain.to_string(),
+            created_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    // ── testes de dashboard ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_dashboard_inicia_no_primeiro_item() {
+        let app = App::new();
+        assert_eq!(app.dashboard_selected, 0);
+    }
+
+    #[test]
+    fn test_dashboard_menu_tem_7_itens() {
+        assert_eq!(App::dashboard_menu_items().len(), 7);
+    }
+
+    #[test]
+    fn test_dashboard_next_navega() {
+        let mut app = App::new();
+        app.dashboard_next();
+        assert_eq!(app.dashboard_selected, 1);
+        app.dashboard_next();
+        assert_eq!(app.dashboard_selected, 2);
+    }
+
+    #[test]
+    fn test_dashboard_next_wrap() {
+        let mut app = App::new();
+        let total = App::dashboard_menu_items().len();
+        for _ in 0..total {
+            app.dashboard_next();
+        }
+        assert_eq!(app.dashboard_selected, 0);
+    }
+
+    #[test]
+    fn test_dashboard_previous_navega() {
+        let mut app = App::new();
+        app.dashboard_selected = 3;
+        app.dashboard_previous();
+        assert_eq!(app.dashboard_selected, 2);
+        app.dashboard_previous();
+        assert_eq!(app.dashboard_selected, 1);
+    }
+
+    #[test]
+    fn test_dashboard_previous_wrap() {
+        let mut app = App::new();
+        assert_eq!(app.dashboard_selected, 0);
+        app.dashboard_previous();
+        assert_eq!(
+            app.dashboard_selected,
+            App::dashboard_menu_items().len() - 1
+        );
+    }
+
+    // ── testes de targets ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_targets_next_navega() {
+        let mut app = App::new();
+        app.targets = vec![
+            make_target("empresa.com"),
+            make_target("subsidiaria.com"),
+            make_target("outro.com"),
+        ];
+        assert_eq!(app.target_selected, 0);
+        app.targets_next();
+        assert_eq!(app.target_selected, 1);
+        app.targets_next();
+        assert_eq!(app.target_selected, 2);
+    }
+
+    #[test]
+    fn test_targets_next_wrap() {
+        let mut app = App::new();
+        app.targets = vec![make_target("a.com"), make_target("b.com")];
+        app.target_selected = 1;
+        app.targets_next();
+        assert_eq!(app.target_selected, 0);
+    }
+
+    #[test]
+    fn test_targets_previous_navega() {
+        let mut app = App::new();
+        app.targets = vec![
+            make_target("a.com"),
+            make_target("b.com"),
+            make_target("c.com"),
+        ];
+        app.target_selected = 2;
+        app.targets_previous();
+        assert_eq!(app.target_selected, 1);
+        app.targets_previous();
+        assert_eq!(app.target_selected, 0);
+    }
+
+    #[test]
+    fn test_targets_previous_wrap() {
+        let mut app = App::new();
+        app.targets = vec![make_target("a.com"), make_target("b.com")];
+        app.target_selected = 0;
+        app.targets_previous();
+        assert_eq!(app.target_selected, 1);
+    }
+
+    #[test]
+    fn test_targets_next_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.targets_next();
+        assert_eq!(app.target_selected, 0);
+    }
+
+    #[test]
+    fn test_targets_previous_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.targets_previous();
+        assert_eq!(app.target_selected, 0);
+    }
+
+    #[test]
+    fn test_selected_target_retorna_correto() {
+        let mut app = App::new();
+        let t = make_target("alvo.com");
+        app.targets = vec![make_target("a.com"), t.clone(), make_target("b.com")];
+        app.target_selected = 1;
+        let selected = app.selected_target().unwrap();
+        assert_eq!(selected.domain, "alvo.com");
+        assert_eq!(selected.id, t.id);
+    }
+
+    #[test]
+    fn test_selected_target_vazio_retorna_none() {
+        let app = App::new();
+        assert!(app.selected_target().is_none());
+    }
+
+    #[test]
+    fn test_creating_target_inicia_false() {
+        let app = App::new();
+        assert!(!app.creating_target);
     }
 }
