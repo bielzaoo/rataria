@@ -88,3 +88,17 @@ pub struct UpdateSubdomain {
     pub status_code: Option<i32>,
     pub title: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tag {
+    pub id: String,
+    pub subdomain_id: String,
+    pub name: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewTag {
+    pub subdomain_id: String,
+    pub name: String,
+}

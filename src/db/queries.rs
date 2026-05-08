@@ -1,8 +1,7 @@
 use crate::db::models::{
-    Engagement, NewEngagement, NewSubdomain, NewTarget, Subdomain, SubdomainStatus, Target,
-    UpdateSubdomain,
+    Engagement, NewEngagement, NewSubdomain, NewTag, NewTarget, Subdomain, SubdomainStatus, Tag,
+    Target, UpdateSubdomain,
 };
-
 use crate::db::Database;
 use crate::error::{RatariaError, Result};
 use chrono::Utc;
@@ -396,6 +395,78 @@ pub fn list_subdomains_by_status(
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(items)
+}
+
+// ─── Tags ─────────────────────────────────────────────────────────────────────
+
+// ─── Tags ─────────────────────────────────────────────────────────────────────
+
+pub fn create_tag(db: &Database, new: NewTag) -> Result<Tag> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().naive_utc();
+
+    db.conn.execute(
+        "INSERT INTO tags (id, subdomain_id, name, created_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![id, new.subdomain_id, new.name, now.to_string()],
+    )?;
+
+    Ok(Tag {
+        id,
+        subdomain_id: new.subdomain_id,
+        name: new.name,
+        created_at: now,
+    })
+}
+
+pub fn list_tags(db: &Database, subdomain_id: &str) -> Result<Vec<Tag>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, subdomain_id, name, created_at
+         FROM tags WHERE subdomain_id = ?1 ORDER BY name ASC",
+    )?;
+
+    let items = stmt
+        .query_map([subdomain_id], |row| {
+            let created_str: String = row.get(3)?;
+            Ok(Tag {
+                id: row.get(0)?,
+                subdomain_id: row.get(1)?,
+                name: row.get(2)?,
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(items)
+}
+
+pub fn delete_tag(db: &Database, id: &str) -> Result<()> {
+    let rows_affected = db
+        .conn
+        .execute("DELETE FROM tags WHERE id = ?1", rusqlite::params![id])?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("Tag não encontrada".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn delete_tag_by_name(db: &Database, subdomain_id: &str, name: &str) -> Result<()> {
+    let rows_affected = db.conn.execute(
+        "DELETE FROM tags WHERE subdomain_id = ?1 AND name = ?2",
+        rusqlite::params![subdomain_id, name],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("Tag não encontrada".to_string()));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1089,6 +1160,207 @@ mod tests {
         delete_target(&db, &target.id).unwrap();
 
         let lista = list_subdomains(&db, &target.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    // ─── Helper para subdomain ────────────────────────────────────────────────
+
+    fn create_test_subdomain(db: &Database, target_id: &str, subdomain: &str) -> Subdomain {
+        create_subdomain(
+            db,
+            NewSubdomain {
+                target_id: target_id.to_string(),
+                subdomain: subdomain.to_string(),
+                status_code: None,
+                title: None,
+            },
+        )
+        .unwrap()
+    }
+
+    // ─── Testes de Tag ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_tag() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let tag = create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "login-page".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert!(!tag.id.is_empty());
+        assert_eq!(tag.name, "login-page");
+        assert_eq!(tag.subdomain_id, sub.id);
+    }
+
+    #[test]
+    fn test_tag_duplicada_falha() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "api-endpoint".to_string(),
+            },
+        )
+        .unwrap();
+
+        let resultado = create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "api-endpoint".to_string(),
+            },
+        );
+
+        assert!(resultado.is_err());
+    }
+
+    #[test]
+    fn test_mesma_tag_em_subdomains_diferentes() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub1 = create_test_subdomain(&db, &target.id, "api.empresa.com");
+        let sub2 = create_test_subdomain(&db, &target.id, "admin.empresa.com");
+
+        // A mesma tag pode existir em subdomains diferentes
+        create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub1.id.clone(),
+                name: "login-page".to_string(),
+            },
+        )
+        .unwrap();
+
+        let resultado = create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub2.id.clone(),
+                name: "login-page".to_string(),
+            },
+        );
+
+        assert!(resultado.is_ok());
+    }
+
+    #[test]
+    fn test_list_tags_vazio() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let lista = list_tags(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_list_tags() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "login-page".to_string(),
+            },
+        )
+        .unwrap();
+
+        create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "interesting".to_string(),
+            },
+        )
+        .unwrap();
+
+        let lista = list_tags(&db, &sub.id).unwrap();
+        assert_eq!(lista.len(), 2);
+    }
+
+    #[test]
+    fn test_delete_tag_por_id() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let tag = create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "outdated".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_tag(&db, &tag.id).unwrap();
+
+        let lista = list_tags(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_delete_tag_por_nome() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "false-positive".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_tag_by_name(&db, &sub.id, "false-positive").unwrap();
+
+        let lista = list_tags(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_delete_subdomain_cascata_tags() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_tag(
+            &db,
+            NewTag {
+                subdomain_id: sub.id.clone(),
+                name: "api-endpoint".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_subdomain(&db, &sub.id).unwrap();
+
+        // Tags devem ter sido deletadas por CASCADE
+        let lista = list_tags(&db, &sub.id).unwrap();
         assert!(lista.is_empty());
     }
 }
