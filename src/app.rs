@@ -8,6 +8,7 @@ pub enum Screen {
     ListEngagements,
     Dashboard,
     Targets,
+    Subdomains,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +50,16 @@ pub struct App {
 
     // Estado do formulário de target (reutiliza form_name)
     pub creating_target: bool,
+    // Estado de subdomains
+    pub subdomains: Vec<crate::db::models::Subdomain>,
+    pub subdomain_selected: usize,
+    pub current_subdomain: Option<crate::db::models::Subdomain>,
+    pub creating_subdomain: bool,
+    pub subdomain_filter: Option<crate::db::models::SubdomainStatus>,
+
+    // Edição inline de subdomain
+    pub editing_notes: bool,
+    pub form_notes: String,
 }
 
 impl App {
@@ -72,6 +83,13 @@ impl App {
             target_selected: 0,
             current_target: None,
             creating_target: false,
+            subdomains: Vec::new(),
+            subdomain_selected: 0,
+            current_subdomain: None,
+            creating_subdomain: false,
+            subdomain_filter: None,
+            editing_notes: false,
+            form_notes: String::new(),
         }
     }
 
@@ -184,6 +202,39 @@ impl App {
 
     pub fn selected_target(&self) -> Option<&crate::db::models::Target> {
         self.targets.get(self.target_selected)
+    }
+
+    pub fn subdomains_next(&mut self) {
+        if self.subdomains.is_empty() {
+            return;
+        }
+        self.subdomain_selected = (self.subdomain_selected + 1) % self.subdomains.len();
+    }
+
+    pub fn subdomains_previous(&mut self) {
+        if self.subdomains.is_empty() {
+            return;
+        }
+        if self.subdomain_selected == 0 {
+            self.subdomain_selected = self.subdomains.len() - 1;
+        } else {
+            self.subdomain_selected -= 1;
+        }
+    }
+
+    pub fn selected_subdomain(&self) -> Option<&crate::db::models::Subdomain> {
+        self.subdomains.get(self.subdomain_selected)
+    }
+
+    pub fn subdomains_filtered(&self) -> Vec<&crate::db::models::Subdomain> {
+        match &self.subdomain_filter {
+            None => self.subdomains.iter().collect(),
+            Some(status) => self
+                .subdomains
+                .iter()
+                .filter(|s| &s.status == status)
+                .collect(),
+        }
     }
 }
 
@@ -538,5 +589,152 @@ mod tests {
     fn test_creating_target_inicia_false() {
         let app = App::new();
         assert!(!app.creating_target);
+    }
+
+    // ── helpers de subdomain ──────────────────────────────────────────────────
+
+    fn make_subdomain(
+        sub: &str,
+        status: crate::db::models::SubdomainStatus,
+    ) -> crate::db::models::Subdomain {
+        crate::db::models::Subdomain {
+            id: uuid::Uuid::new_v4().to_string(),
+            target_id: uuid::Uuid::new_v4().to_string(),
+            subdomain: sub.to_string(),
+            status,
+            notes: None,
+            status_code: None,
+            title: None,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    // ── testes de subdomains ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_subdomains_next_navega() {
+        let mut app = App::new();
+        app.subdomains = vec![
+            make_subdomain("api.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            make_subdomain(
+                "admin.x.com",
+                crate::db::models::SubdomainStatus::NotVisited,
+            ),
+            make_subdomain("dev.x.com", crate::db::models::SubdomainStatus::NotVisited),
+        ];
+        assert_eq!(app.subdomain_selected, 0);
+        app.subdomains_next();
+        assert_eq!(app.subdomain_selected, 1);
+        app.subdomains_next();
+        assert_eq!(app.subdomain_selected, 2);
+    }
+
+    #[test]
+    fn test_subdomains_next_wrap() {
+        let mut app = App::new();
+        app.subdomains = vec![
+            make_subdomain("a.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            make_subdomain("b.x.com", crate::db::models::SubdomainStatus::NotVisited),
+        ];
+        app.subdomain_selected = 1;
+        app.subdomains_next();
+        assert_eq!(app.subdomain_selected, 0);
+    }
+
+    #[test]
+    fn test_subdomains_previous_navega() {
+        let mut app = App::new();
+        app.subdomains = vec![
+            make_subdomain("a.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            make_subdomain("b.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            make_subdomain("c.x.com", crate::db::models::SubdomainStatus::NotVisited),
+        ];
+        app.subdomain_selected = 2;
+        app.subdomains_previous();
+        assert_eq!(app.subdomain_selected, 1);
+        app.subdomains_previous();
+        assert_eq!(app.subdomain_selected, 0);
+    }
+
+    #[test]
+    fn test_subdomains_previous_wrap() {
+        let mut app = App::new();
+        app.subdomains = vec![
+            make_subdomain("a.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            make_subdomain("b.x.com", crate::db::models::SubdomainStatus::NotVisited),
+        ];
+        app.subdomain_selected = 0;
+        app.subdomains_previous();
+        assert_eq!(app.subdomain_selected, 1);
+    }
+
+    #[test]
+    fn test_subdomains_next_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.subdomains_next();
+        assert_eq!(app.subdomain_selected, 0);
+    }
+
+    #[test]
+    fn test_subdomains_previous_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.subdomains_previous();
+        assert_eq!(app.subdomain_selected, 0);
+    }
+
+    #[test]
+    fn test_selected_subdomain_retorna_correto() {
+        let mut app = App::new();
+        let s = make_subdomain("api.x.com", crate::db::models::SubdomainStatus::Vulnerable);
+        app.subdomains = vec![
+            make_subdomain("a.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            s.clone(),
+        ];
+        app.subdomain_selected = 1;
+        let selected = app.selected_subdomain().unwrap();
+        assert_eq!(selected.subdomain, "api.x.com");
+        assert_eq!(selected.id, s.id);
+    }
+
+    #[test]
+    fn test_selected_subdomain_vazio_retorna_none() {
+        let app = App::new();
+        assert!(app.selected_subdomain().is_none());
+    }
+
+    #[test]
+    fn test_subdomains_filtered_sem_filtro_retorna_todos() {
+        let mut app = App::new();
+        app.subdomains = vec![
+            make_subdomain("a.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            make_subdomain("b.x.com", crate::db::models::SubdomainStatus::Vulnerable),
+            make_subdomain("c.x.com", crate::db::models::SubdomainStatus::Reviewed),
+        ];
+        assert_eq!(app.subdomains_filtered().len(), 3);
+    }
+
+    #[test]
+    fn test_subdomains_filtered_com_filtro() {
+        let mut app = App::new();
+        app.subdomains = vec![
+            make_subdomain("a.x.com", crate::db::models::SubdomainStatus::NotVisited),
+            make_subdomain("b.x.com", crate::db::models::SubdomainStatus::Vulnerable),
+            make_subdomain("c.x.com", crate::db::models::SubdomainStatus::Vulnerable),
+        ];
+        app.subdomain_filter = Some(crate::db::models::SubdomainStatus::Vulnerable);
+        assert_eq!(app.subdomains_filtered().len(), 2);
+    }
+
+    #[test]
+    fn test_subdomains_filter_none_inicial() {
+        let app = App::new();
+        assert!(app.subdomain_filter.is_none());
+    }
+
+    #[test]
+    fn test_editing_notes_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_notes);
     }
 }

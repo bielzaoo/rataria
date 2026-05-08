@@ -35,6 +35,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::ListEngagements => ui::list_engagements::draw(f, app),
                 Screen::Dashboard => ui::dashboard::draw(f, app),
                 Screen::Targets => ui::targets::draw(f, app),
+                Screen::Subdomains => ui::list_engagements::draw(f, app), // placeholder
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -59,6 +60,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::ListEngagements => handle_list_engagements(key.code, app)?,
                     Screen::Dashboard => handle_dashboard(key.code, app)?,
                     Screen::Targets => handle_targets(key.code, app)?,
+                    Screen::Subdomains => {} // placeholder
                 }
             }
         }
@@ -298,16 +300,7 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
                     domain: app.form_name.trim().to_string(),
                 };
 
-                match app.db.as_ref().unwrap().conn.execute(
-                    "INSERT INTO targets (id, engagement_id, domain, created_at)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![
-                        uuid::Uuid::new_v4().to_string(),
-                        new.engagement_id,
-                        new.domain,
-                        chrono::Utc::now().naive_utc().to_string(),
-                    ],
-                ) {
+                match db::queries::create_target(app.db.as_ref().unwrap(), new) {
                     Ok(_) => {
                         app.creating_target = false;
                         app.reset_form();
