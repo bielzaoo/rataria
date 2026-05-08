@@ -8,31 +8,37 @@ use ratatui::{
 
 pub fn draw(f: &mut Frame, app: &App) {
     let area = f.area();
-
-    // Fundo escuro
     f.render_widget(Clear, area);
 
+    // Divide verticalmente: espaço | caixa(3) | erro(1) | espaço | dica(1)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Fill(1),
-            Constraint::Length(7),
+            Constraint::Length(3),
+            Constraint::Length(1),
             Constraint::Fill(1),
+            Constraint::Length(1),
         ])
         .split(area);
 
-    let horizontal = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Fill(1),
-            Constraint::Length(50),
-            Constraint::Fill(1),
-        ])
-        .split(chunks[1]);
+    // Centraliza horizontalmente — largura 44
+    let center = |area, width| {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(width),
+                Constraint::Fill(1),
+            ])
+            .split(area)[1]
+    };
 
-    let box_area = horizontal[1];
+    let box_area = center(chunks[1], 44);
+    let err_area = center(chunks[2], 44);
+    let hint_area = chunks[4];
 
-    // Mascara a senha com asteriscos
+    // Input com asteriscos
     let masked: String = "*".repeat(app.password_input.len());
 
     let input = Paragraph::new(masked)
@@ -51,43 +57,17 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     f.render_widget(input, box_area);
 
-    // Exibe erro se houver
+    // Mensagem de erro (se houver)
     if let Some(err) = &app.password_error {
-        let error_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Fill(1),
-                Constraint::Length(7),
-                Constraint::Length(2),
-                Constraint::Fill(1),
-            ])
-            .split(area);
-
-        let err_horizontal = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Fill(1),
-                Constraint::Length(50),
-                Constraint::Fill(1),
-            ])
-            .split(error_chunks[2]);
-
         let error_msg = Paragraph::new(format!("✗ {}", err))
             .style(Style::default().fg(Color::Red))
             .alignment(Alignment::Center);
-
-        f.render_widget(error_msg, err_horizontal[1]);
+        f.render_widget(error_msg, err_area);
     }
 
-    // Dica na parte de baixo
+    // Dica no rodapé
     let hint = Paragraph::new("Enter para confirmar  •  Esc para sair")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
-
-    let hint_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Fill(1), Constraint::Length(1)])
-        .split(area);
-
-    f.render_widget(hint, hint_chunks[1]);
+    f.render_widget(hint, hint_area);
 }
