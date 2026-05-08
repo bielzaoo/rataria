@@ -118,3 +118,47 @@ pub struct NewTechnology {
     pub name: String,
     pub version: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UrlType {
+    Parameter,
+    JavaScript,
+    Endpoint,
+    Other,
+}
+
+impl UrlType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            UrlType::Parameter => "parameter",
+            UrlType::JavaScript => "javascript",
+            UrlType::Endpoint => "endpoint",
+            UrlType::Other => "other",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "parameter" => UrlType::Parameter,
+            "javascript" => UrlType::JavaScript,
+            "endpoint" => UrlType::Endpoint,
+            _ => UrlType::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Url {
+    pub id: String,
+    pub subdomain_id: String,
+    pub url: String,
+    pub url_type: UrlType,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewUrl {
+    pub subdomain_id: String,
+    pub url: String,
+    pub url_type: UrlType,
+}

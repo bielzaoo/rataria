@@ -1,6 +1,6 @@
 use crate::db::models::{
-    Engagement, NewEngagement, NewSubdomain, NewTag, NewTarget, NewTechnology, Subdomain,
-    SubdomainStatus, Tag, Target, Technology, UpdateSubdomain,
+    Engagement, NewEngagement, NewSubdomain, NewTag, NewTarget, NewTechnology, NewUrl, Subdomain,
+    SubdomainStatus, Tag, Target, Technology, UpdateSubdomain, Url, UrlType,
 };
 
 use crate::db::Database;
@@ -529,6 +529,99 @@ pub fn delete_technology(db: &Database, id: &str) -> Result<()> {
         return Err(RatariaError::NotFound(
             "Technology não encontrada".to_string(),
         ));
+    }
+
+    Ok(())
+}
+
+// ─── URLs ─────────────────────────────────────────────────────────────────────
+
+pub fn create_url(db: &Database, new: NewUrl) -> Result<Url> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().naive_utc();
+
+    db.conn.execute(
+        "INSERT INTO urls (id, subdomain_id, url, url_type, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![
+            id,
+            new.subdomain_id,
+            new.url,
+            new.url_type.as_str(),
+            now.to_string()
+        ],
+    )?;
+
+    Ok(Url {
+        id,
+        subdomain_id: new.subdomain_id,
+        url: new.url,
+        url_type: new.url_type,
+        created_at: now,
+    })
+}
+
+pub fn list_urls(db: &Database, subdomain_id: &str) -> Result<Vec<Url>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, subdomain_id, url, url_type, created_at
+         FROM urls WHERE subdomain_id = ?1 ORDER BY url ASC",
+    )?;
+
+    let items = stmt
+        .query_map([subdomain_id], |row| {
+            let type_str: String = row.get(3)?;
+            let created_str: String = row.get(4)?;
+            Ok(Url {
+                id: row.get(0)?,
+                subdomain_id: row.get(1)?,
+                url: row.get(2)?,
+                url_type: UrlType::from_str(&type_str),
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(items)
+}
+
+pub fn list_urls_by_type(db: &Database, subdomain_id: &str, url_type: UrlType) -> Result<Vec<Url>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, subdomain_id, url, url_type, created_at
+         FROM urls WHERE subdomain_id = ?1 AND url_type = ?2 ORDER BY url ASC",
+    )?;
+
+    let items = stmt
+        .query_map(rusqlite::params![subdomain_id, url_type.as_str()], |row| {
+            let type_str: String = row.get(3)?;
+            let created_str: String = row.get(4)?;
+            Ok(Url {
+                id: row.get(0)?,
+                subdomain_id: row.get(1)?,
+                url: row.get(2)?,
+                url_type: UrlType::from_str(&type_str),
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(items)
+}
+
+pub fn delete_url(db: &Database, id: &str) -> Result<()> {
+    let rows_affected = db
+        .conn
+        .execute("DELETE FROM urls WHERE id = ?1", rusqlite::params![id])?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("URL não encontrada".to_string()));
     }
 
     Ok(())
@@ -1559,6 +1652,192 @@ mod tests {
         delete_subdomain(&db, &sub.id).unwrap();
 
         let lista = list_technologies(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    // ─── Testes de URL ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_url() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let url = create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/v1/users?id=1".to_string(),
+                url_type: UrlType::Parameter,
+            },
+        )
+        .unwrap();
+
+        assert!(!url.id.is_empty());
+        assert_eq!(url.url, "https://api.empresa.com/v1/users?id=1");
+        assert_eq!(url.url_type, UrlType::Parameter);
+        assert_eq!(url.subdomain_id, sub.id);
+    }
+
+    #[test]
+    fn test_url_duplicada_falha() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/login".to_string(),
+                url_type: UrlType::Endpoint,
+            },
+        )
+        .unwrap();
+
+        let resultado = create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/login".to_string(),
+                url_type: UrlType::Endpoint,
+            },
+        );
+
+        assert!(resultado.is_err());
+    }
+
+    #[test]
+    fn test_list_urls_vazio() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let lista = list_urls(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_list_urls() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/app.js".to_string(),
+                url_type: UrlType::JavaScript,
+            },
+        )
+        .unwrap();
+
+        create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/v1/users?id=1".to_string(),
+                url_type: UrlType::Parameter,
+            },
+        )
+        .unwrap();
+
+        let lista = list_urls(&db, &sub.id).unwrap();
+        assert_eq!(lista.len(), 2);
+    }
+
+    #[test]
+    fn test_list_urls_por_tipo() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/app.js".to_string(),
+                url_type: UrlType::JavaScript,
+            },
+        )
+        .unwrap();
+
+        create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/v1/users?id=1".to_string(),
+                url_type: UrlType::Parameter,
+            },
+        )
+        .unwrap();
+
+        create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/chunk.js".to_string(),
+                url_type: UrlType::JavaScript,
+            },
+        )
+        .unwrap();
+
+        let js_urls = list_urls_by_type(&db, &sub.id, UrlType::JavaScript).unwrap();
+        assert_eq!(js_urls.len(), 2);
+
+        let param_urls = list_urls_by_type(&db, &sub.id, UrlType::Parameter).unwrap();
+        assert_eq!(param_urls.len(), 1);
+    }
+
+    #[test]
+    fn test_delete_url() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let url = create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/v1/delete".to_string(),
+                url_type: UrlType::Endpoint,
+            },
+        )
+        .unwrap();
+
+        delete_url(&db, &url.id).unwrap();
+
+        let lista = list_urls(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_delete_subdomain_cascata_urls() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/v1/users".to_string(),
+                url_type: UrlType::Endpoint,
+            },
+        )
+        .unwrap();
+
+        delete_subdomain(&db, &sub.id).unwrap();
+
+        let lista = list_urls(&db, &sub.id).unwrap();
         assert!(lista.is_empty());
     }
 }
