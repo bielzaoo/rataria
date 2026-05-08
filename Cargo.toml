@@ -4,14 +4,33 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Banco de dados com criptografia
 rusqlite = { version = "0.39", features = ["bundled-sqlcipher"] }
-rand_core = { version = "0.6", features = ["getrandom"] }
+
+# Criptografia da senha master
 argon2 = "0.5"
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+# Limpar dados sensíveis da memória
 zeroize = { version = "1.7", features = ["derive"] }
+
+# Geração de UUIDs
 uuid = { version = "1.8", features = ["v4"] }
+
+# Datas e timestamps
 chrono = { version = "0.4", features = ["serde"] }
+
+# Serialização JSON
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+# Tratamento de erros
 thiserror = "2.0"
 anyhow = "1.0"
+
+# Diretórios do sistema (XDG)
 dirs = "5.0"
+
+# TUI
+ratatui = "0.30"
+crossterm = "0.29"
