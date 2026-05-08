@@ -23,10 +23,12 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
     let db_path = Database::default_path();
 
     loop {
+        // No loop de draw, troca:
         terminal
             .draw(|f| match app.screen {
                 Screen::Password => ui::password::draw(f, app),
                 Screen::Home => ui::home::draw(f, app),
+                Screen::CreateEngagement | Screen::ListEngagements => todo!(),
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -43,9 +45,11 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     continue;
                 }
 
+                // No loop de eventos, troca:
                 match app.screen {
                     Screen::Password => handle_password(key.code, app, &db_path)?,
                     Screen::Home => handle_home(key.code, app),
+                    Screen::CreateEngagement | Screen::ListEngagements => {}
                 }
             }
         }
