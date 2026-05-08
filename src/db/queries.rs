@@ -1,7 +1,8 @@
 use crate::db::models::{
-    Engagement, NewEngagement, NewSubdomain, NewTag, NewTarget, Subdomain, SubdomainStatus, Tag,
-    Target, UpdateSubdomain,
+    Engagement, NewEngagement, NewSubdomain, NewTag, NewTarget, NewTechnology, Subdomain,
+    SubdomainStatus, Tag, Target, Technology, UpdateSubdomain,
 };
+
 use crate::db::Database;
 use crate::error::{RatariaError, Result};
 use chrono::Utc;
@@ -464,6 +465,70 @@ pub fn delete_tag_by_name(db: &Database, subdomain_id: &str, name: &str) -> Resu
 
     if rows_affected == 0 {
         return Err(RatariaError::NotFound("Tag não encontrada".to_string()));
+    }
+
+    Ok(())
+}
+
+// ─── Technologies ─────────────────────────────────────────────────────────────
+
+// ─── Technologies ─────────────────────────────────────────────────────────────
+
+pub fn create_technology(db: &Database, new: NewTechnology) -> Result<Technology> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().naive_utc();
+
+    db.conn.execute(
+        "INSERT INTO technologies (id, subdomain_id, name, version, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![id, new.subdomain_id, new.name, new.version, now.to_string()],
+    )?;
+
+    Ok(Technology {
+        id,
+        subdomain_id: new.subdomain_id,
+        name: new.name,
+        version: new.version,
+        created_at: now,
+    })
+}
+
+pub fn list_technologies(db: &Database, subdomain_id: &str) -> Result<Vec<Technology>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, subdomain_id, name, version, created_at
+         FROM technologies WHERE subdomain_id = ?1 ORDER BY name ASC",
+    )?;
+
+    let items = stmt
+        .query_map([subdomain_id], |row| {
+            let created_str: String = row.get(4)?;
+            Ok(Technology {
+                id: row.get(0)?,
+                subdomain_id: row.get(1)?,
+                name: row.get(2)?,
+                version: row.get(3)?,
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(items)
+}
+
+pub fn delete_technology(db: &Database, id: &str) -> Result<()> {
+    let rows_affected = db.conn.execute(
+        "DELETE FROM technologies WHERE id = ?1",
+        rusqlite::params![id],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound(
+            "Technology não encontrada".to_string(),
+        ));
     }
 
     Ok(())
@@ -1361,6 +1426,139 @@ mod tests {
 
         // Tags devem ter sido deletadas por CASCADE
         let lista = list_tags(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    // ─── Testes de Technology ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_technology() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "app.empresa.com");
+
+        let tech = create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "WordPress".to_string(),
+                version: Some("6.4".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert!(!tech.id.is_empty());
+        assert_eq!(tech.name, "WordPress");
+        assert_eq!(tech.version, Some("6.4".to_string()));
+        assert_eq!(tech.subdomain_id, sub.id);
+    }
+
+    #[test]
+    fn test_create_technology_sem_versao() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "app.empresa.com");
+
+        let tech = create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "React".to_string(),
+                version: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(tech.version, None);
+    }
+
+    #[test]
+    fn test_list_technologies_vazio() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "app.empresa.com");
+
+        let lista = list_technologies(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_list_technologies() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "app.empresa.com");
+
+        create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "WordPress".to_string(),
+                version: Some("6.4".to_string()),
+            },
+        )
+        .unwrap();
+
+        create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "jQuery".to_string(),
+                version: Some("3.6".to_string()),
+            },
+        )
+        .unwrap();
+
+        let lista = list_technologies(&db, &sub.id).unwrap();
+        assert_eq!(lista.len(), 2);
+    }
+
+    #[test]
+    fn test_delete_technology() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "app.empresa.com");
+
+        let tech = create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "Apache".to_string(),
+                version: None,
+            },
+        )
+        .unwrap();
+
+        delete_technology(&db, &tech.id).unwrap();
+
+        let lista = list_technologies(&db, &sub.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_delete_subdomain_cascata_technologies() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "app.empresa.com");
+
+        create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "Nginx".to_string(),
+                version: Some("1.24".to_string()),
+            },
+        )
+        .unwrap();
+
+        delete_subdomain(&db, &sub.id).unwrap();
+
+        let lista = list_technologies(&db, &sub.id).unwrap();
         assert!(lista.is_empty());
     }
 }

@@ -102,3 +102,19 @@ pub struct NewTag {
     pub subdomain_id: String,
     pub name: String,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Technology {
+    pub id: String,
+    pub subdomain_id: String,
+    pub name: String,
+    pub version: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewTechnology {
+    pub subdomain_id: String,
+    pub name: String,
+    pub version: Option<String>,
+}
