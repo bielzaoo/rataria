@@ -1,6 +1,7 @@
 use crate::db::models::{
-    Engagement, NewEngagement, NewSubdomain, NewTag, NewTarget, NewTechnology, NewUrl, Subdomain,
-    SubdomainStatus, Tag, Target, Technology, UpdateSubdomain, Url, UrlType,
+    Asn, Engagement, Ip, NewAsn, NewEngagement, NewIp, NewScreenshot, NewSubdomain, NewTag,
+    NewTarget, NewTechnology, NewUrl, Screenshot, Subdomain, SubdomainStatus, Tag, Target,
+    Technology, UpdateSubdomain, Url, UrlType,
 };
 
 use crate::db::Database;
@@ -622,6 +623,178 @@ pub fn delete_url(db: &Database, id: &str) -> Result<()> {
 
     if rows_affected == 0 {
         return Err(RatariaError::NotFound("URL não encontrada".to_string()));
+    }
+
+    Ok(())
+}
+
+// ─── IPs ──────────────────────────────────────────────────────────────────────
+
+pub fn create_ip(db: &Database, new: NewIp) -> Result<Ip> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().naive_utc();
+
+    db.conn.execute(
+        "INSERT INTO ips (id, target_id, ip, created_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![id, new.target_id, new.ip, now.to_string()],
+    )?;
+
+    Ok(Ip {
+        id,
+        target_id: new.target_id,
+        ip: new.ip,
+        created_at: now,
+    })
+}
+
+pub fn list_ips(db: &Database, target_id: &str) -> Result<Vec<Ip>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, target_id, ip, created_at FROM ips WHERE target_id = ?1 ORDER BY ip ASC",
+    )?;
+
+    let items = stmt
+        .query_map([target_id], |row| {
+            let created_str: String = row.get(3)?;
+            Ok(Ip {
+                id: row.get(0)?,
+                target_id: row.get(1)?,
+                ip: row.get(2)?,
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(items)
+}
+
+pub fn delete_ip(db: &Database, id: &str) -> Result<()> {
+    let rows_affected = db
+        .conn
+        .execute("DELETE FROM ips WHERE id = ?1", rusqlite::params![id])?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("IP não encontrado".to_string()));
+    }
+
+    Ok(())
+}
+
+// ─── ASNs ─────────────────────────────────────────────────────────────────────
+
+pub fn create_asn(db: &Database, new: NewAsn) -> Result<Asn> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().naive_utc();
+
+    db.conn.execute(
+        "INSERT INTO asns (id, target_id, asn, org, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![id, new.target_id, new.asn, new.org, now.to_string()],
+    )?;
+
+    Ok(Asn {
+        id,
+        target_id: new.target_id,
+        asn: new.asn,
+        org: new.org,
+        created_at: now,
+    })
+}
+
+pub fn list_asns(db: &Database, target_id: &str) -> Result<Vec<Asn>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, target_id, asn, org, created_at FROM asns WHERE target_id = ?1 ORDER BY asn ASC",
+    )?;
+
+    let items = stmt
+        .query_map([target_id], |row| {
+            let created_str: String = row.get(4)?;
+            Ok(Asn {
+                id: row.get(0)?,
+                target_id: row.get(1)?,
+                asn: row.get(2)?,
+                org: row.get(3)?,
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(items)
+}
+
+pub fn delete_asn(db: &Database, id: &str) -> Result<()> {
+    let rows_affected = db
+        .conn
+        .execute("DELETE FROM asns WHERE id = ?1", rusqlite::params![id])?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("ASN não encontrado".to_string()));
+    }
+
+    Ok(())
+}
+
+// ─── Screenshots ──────────────────────────────────────────────────────────────
+
+pub fn create_screenshot(db: &Database, new: NewScreenshot) -> Result<Screenshot> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().naive_utc();
+
+    db.conn.execute(
+        "INSERT INTO screenshots (id, subdomain_id, file_path, created_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![id, new.subdomain_id, new.file_path, now.to_string()],
+    )?;
+
+    Ok(Screenshot {
+        id,
+        subdomain_id: new.subdomain_id,
+        file_path: new.file_path,
+        created_at: now,
+    })
+}
+
+pub fn get_screenshot_by_subdomain(
+    db: &Database,
+    subdomain_id: &str,
+) -> Result<Option<Screenshot>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, subdomain_id, file_path, created_at
+         FROM screenshots WHERE subdomain_id = ?1 LIMIT 1",
+    )?;
+
+    let mut rows = stmt.query_map([subdomain_id], |row| {
+        let created_str: String = row.get(3)?;
+        Ok(Screenshot {
+            id: row.get(0)?,
+            subdomain_id: row.get(1)?,
+            file_path: row.get(2)?,
+            created_at: chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S%.f")
+                .unwrap_or_default(),
+        })
+    })?;
+
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
+pub fn delete_screenshot(db: &Database, id: &str) -> Result<()> {
+    let rows_affected = db.conn.execute(
+        "DELETE FROM screenshots WHERE id = ?1",
+        rusqlite::params![id],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound(
+            "Screenshot não encontrada".to_string(),
+        ));
     }
 
     Ok(())
@@ -1839,5 +2012,381 @@ mod tests {
 
         let lista = list_urls(&db, &sub.id).unwrap();
         assert!(lista.is_empty());
+    }
+
+    // ─── Testes de IP ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_ip() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        let ip = create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "192.168.1.1".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert!(!ip.id.is_empty());
+        assert_eq!(ip.ip, "192.168.1.1");
+        assert_eq!(ip.target_id, target.id);
+    }
+
+    #[test]
+    fn test_ip_duplicado_falha() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "10.0.0.1".to_string(),
+            },
+        )
+        .unwrap();
+
+        let resultado = create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "10.0.0.1".to_string(),
+            },
+        );
+
+        assert!(resultado.is_err());
+    }
+
+    #[test]
+    fn test_list_ips_vazio() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        let lista = list_ips(&db, &target.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_list_ips() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "192.168.1.1".to_string(),
+            },
+        )
+        .unwrap();
+        create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "192.168.1.2".to_string(),
+            },
+        )
+        .unwrap();
+
+        let lista = list_ips(&db, &target.id).unwrap();
+        assert_eq!(lista.len(), 2);
+    }
+
+    #[test]
+    fn test_delete_ip() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        let ip = create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "10.10.10.10".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_ip(&db, &ip.id).unwrap();
+
+        let lista = list_ips(&db, &target.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_delete_target_cascata_ips() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "1.1.1.1".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_target(&db, &target.id).unwrap();
+
+        let lista = list_ips(&db, &target.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    // ─── Testes de ASN ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_asn() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        let asn = create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS12345".to_string(),
+                org: Some("Empresa XPTO Ltda".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert!(!asn.id.is_empty());
+        assert_eq!(asn.asn, "AS12345");
+        assert_eq!(asn.org, Some("Empresa XPTO Ltda".to_string()));
+    }
+
+    #[test]
+    fn test_create_asn_sem_org() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        let asn = create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS99999".to_string(),
+                org: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(asn.org, None);
+    }
+
+    #[test]
+    fn test_asn_duplicado_falha() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS12345".to_string(),
+                org: None,
+            },
+        )
+        .unwrap();
+
+        let resultado = create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS12345".to_string(),
+                org: None,
+            },
+        );
+
+        assert!(resultado.is_err());
+    }
+
+    #[test]
+    fn test_list_asns_vazio() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        let lista = list_asns(&db, &target.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_list_asns() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS111".to_string(),
+                org: None,
+            },
+        )
+        .unwrap();
+        create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS222".to_string(),
+                org: None,
+            },
+        )
+        .unwrap();
+
+        let lista = list_asns(&db, &target.id).unwrap();
+        assert_eq!(lista.len(), 2);
+    }
+
+    #[test]
+    fn test_delete_asn() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        let asn = create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS55555".to_string(),
+                org: None,
+            },
+        )
+        .unwrap();
+
+        delete_asn(&db, &asn.id).unwrap();
+
+        let lista = list_asns(&db, &target.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    #[test]
+    fn test_delete_target_cascata_asns() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+
+        create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS777".to_string(),
+                org: None,
+            },
+        )
+        .unwrap();
+
+        delete_target(&db, &target.id).unwrap();
+
+        let lista = list_asns(&db, &target.id).unwrap();
+        assert!(lista.is_empty());
+    }
+
+    // ─── Testes de Screenshot ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_screenshot() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let shot = create_screenshot(
+            &db,
+            NewScreenshot {
+                subdomain_id: sub.id.clone(),
+                file_path: "/home/user/.local/share/rataria/screenshots/api_empresa_com.png"
+                    .to_string(),
+            },
+        )
+        .unwrap();
+
+        assert!(!shot.id.is_empty());
+        assert_eq!(shot.subdomain_id, sub.id);
+        assert!(shot.file_path.ends_with(".png"));
+    }
+
+    #[test]
+    fn test_get_screenshot_por_subdomain() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_screenshot(
+            &db,
+            NewScreenshot {
+                subdomain_id: sub.id.clone(),
+                file_path: "/screenshots/api.png".to_string(),
+            },
+        )
+        .unwrap();
+
+        let encontrado = get_screenshot_by_subdomain(&db, &sub.id).unwrap();
+        assert!(encontrado.is_some());
+        assert_eq!(encontrado.unwrap().file_path, "/screenshots/api.png");
+    }
+
+    #[test]
+    fn test_get_screenshot_inexistente() {
+        let db = setup();
+        let resultado = get_screenshot_by_subdomain(&db, "id-inexistente").unwrap();
+        assert!(resultado.is_none());
+    }
+
+    #[test]
+    fn test_delete_screenshot() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let shot = create_screenshot(
+            &db,
+            NewScreenshot {
+                subdomain_id: sub.id.clone(),
+                file_path: "/screenshots/api.png".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_screenshot(&db, &shot.id).unwrap();
+
+        let resultado = get_screenshot_by_subdomain(&db, &sub.id).unwrap();
+        assert!(resultado.is_none());
+    }
+
+    #[test]
+    fn test_delete_subdomain_cascata_screenshots() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        create_screenshot(
+            &db,
+            NewScreenshot {
+                subdomain_id: sub.id.clone(),
+                file_path: "/screenshots/api.png".to_string(),
+            },
+        )
+        .unwrap();
+
+        delete_subdomain(&db, &sub.id).unwrap();
+
+        let resultado = get_screenshot_by_subdomain(&db, &sub.id).unwrap();
+        assert!(resultado.is_none());
     }
 }

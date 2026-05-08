@@ -162,3 +162,47 @@ pub struct NewUrl {
     pub url: String,
     pub url_type: UrlType,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Ip {
+    pub id: String,
+    pub target_id: String,
+    pub ip: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewIp {
+    pub target_id: String,
+    pub ip: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Asn {
+    pub id: String,
+    pub target_id: String,
+    pub asn: String,
+    pub org: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewAsn {
+    pub target_id: String,
+    pub asn: String,
+    pub org: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Screenshot {
+    pub id: String,
+    pub subdomain_id: String,
+    pub file_path: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewScreenshot {
+    pub subdomain_id: String,
+    pub file_path: String,
+}
