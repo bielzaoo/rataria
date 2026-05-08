@@ -1,5 +1,7 @@
 #![allow(dead_code, unused_imports)]
 
+use chrono;
+use uuid;
 mod app;
 mod auth;
 mod db;
@@ -31,8 +33,8 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::Home => ui::home::draw(f, app),
                 Screen::CreateEngagement => ui::create_engagement::draw(f, app),
                 Screen::ListEngagements => ui::list_engagements::draw(f, app),
-                Screen::Dashboard => ui::list_engagements::draw(f, app), // placeholder
-                Screen::Targets => ui::list_engagements::draw(f, app),   // placeholder
+                Screen::Dashboard => ui::dashboard::draw(f, app),
+                Screen::Targets => ui::targets::draw(f, app),
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -55,8 +57,8 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::Home => handle_home(key.code, app),
                     Screen::CreateEngagement => handle_create_engagement(key.code, app)?,
                     Screen::ListEngagements => handle_list_engagements(key.code, app)?,
-                    Screen::Dashboard => {} // placeholder
-                    Screen::Targets => {}   // placeholder
+                    Screen::Dashboard => handle_dashboard(key.code, app)?,
+                    Screen::Targets => handle_targets(key.code, app)?,
                 }
             }
         }
@@ -222,11 +224,149 @@ fn handle_list_engagements(key: KeyCode, app: &mut App) -> Result<()> {
         }
         KeyCode::Enter => {
             if let Some(eng) = app.selected_engagement().cloned() {
+                let eng_id = eng.id.clone();
                 app.current_engagement = Some(eng);
-                // Dashboard virá na próxima fase
+                app.dashboard_selected = 0;
+
+                // Carrega os targets do engagement selecionado
+                if let Some(db) = &app.db {
+                    app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                }
+
+                app.target_selected = 0;
+                app.screen = Screen::Dashboard;
             }
         }
         _ => {}
+    }
+    Ok(())
+}
+
+fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
+    match key {
+        KeyCode::Esc => {
+            app.screen = Screen::ListEngagements;
+            if let Some(db) = &app.db {
+                app.engagements = db::queries::list_engagements(db).unwrap_or_default();
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => app.dashboard_next(),
+        KeyCode::Up | KeyCode::Char('k') => app.dashboard_previous(),
+        KeyCode::Enter => {
+            match app.dashboard_selected {
+                0 => {
+                    // Targets
+                    if let Some(eng) = &app.current_engagement {
+                        let eng_id = eng.id.clone();
+                        if let Some(db) = &app.db {
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        }
+                    }
+                    app.target_selected = 0;
+                    app.creating_target = false;
+                    app.screen = Screen::Targets;
+                }
+                _ => {} // outras seções virão nas próximas fases
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.creating_target {
+        match key {
+            KeyCode::Esc => {
+                app.creating_target = false;
+                app.reset_form();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Domínio é obrigatório".to_string());
+                    return Ok(());
+                }
+
+                let eng_id = match &app.current_engagement {
+                    Some(e) => e.id.clone(),
+                    None => return Ok(()),
+                };
+
+                let new = db::models::NewTarget {
+                    engagement_id: eng_id.clone(),
+                    domain: app.form_name.trim().to_string(),
+                };
+
+                match app.db.as_ref().unwrap().conn.execute(
+                    "INSERT INTO targets (id, engagement_id, domain, created_at)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![
+                        uuid::Uuid::new_v4().to_string(),
+                        new.engagement_id,
+                        new.domain,
+                        chrono::Utc::now().naive_utc().to_string(),
+                    ],
+                ) {
+                    Ok(_) => {
+                        app.creating_target = false;
+                        app.reset_form();
+                        if let Some(db) = &app.db {
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("Já existe um target com esse domínio".to_string());
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
+            }
+            _ => {}
+        }
+    } else {
+        match key {
+            KeyCode::Esc => {
+                app.screen = Screen::Dashboard;
+                // Recarrega targets no painel do dashboard
+                if let Some(eng) = &app.current_engagement {
+                    let eng_id = eng.id.clone();
+                    if let Some(db) = &app.db {
+                        app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                    }
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => app.targets_next(),
+            KeyCode::Up | KeyCode::Char('k') => app.targets_previous(),
+            KeyCode::Char('n') => {
+                app.reset_form();
+                app.creating_target = true;
+            }
+            KeyCode::Char('d') => {
+                if let Some(target) = app.selected_target().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_target(db, &target.id).ok();
+                        let eng_id = app
+                            .current_engagement
+                            .as_ref()
+                            .map(|e| e.id.clone())
+                            .unwrap_or_default();
+                        app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        if app.target_selected >= app.targets.len() && !app.targets.is_empty() {
+                            app.target_selected = app.targets.len() - 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
     }
     Ok(())
 }
