@@ -37,6 +37,13 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::Dashboard => ui::dashboard::draw(f, app),
                 Screen::Targets => ui::targets::draw(f, app),
                 Screen::Subdomains => ui::subdomains::draw(f, app),
+                Screen::TargetMenu => ui::dashboard::draw(f, app), // placeholder
+                Screen::IPs => ui::dashboard::draw(f, app),        // placeholder
+                Screen::ASNs => ui::dashboard::draw(f, app),       // placeholder
+                Screen::SubdomainMenu => ui::dashboard::draw(f, app), // placeholder
+                Screen::URLs => ui::dashboard::draw(f, app),       // placeholder
+                Screen::Technologies => ui::dashboard::draw(f, app), // placeholder
+                Screen::Screenshots => ui::dashboard::draw(f, app), // placeholder
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -62,6 +69,13 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::Dashboard => handle_dashboard(key.code, app)?,
                     Screen::Targets => handle_targets(key.code, app)?,
                     Screen::Subdomains => handle_subdomains(key.code, app)?,
+                    Screen::TargetMenu => {}
+                    Screen::IPs => {}
+                    Screen::ASNs => {}
+                    Screen::SubdomainMenu => {}
+                    Screen::URLs => {}
+                    Screen::Technologies => {}
+                    Screen::Screenshots => {}
                 }
             }
         }

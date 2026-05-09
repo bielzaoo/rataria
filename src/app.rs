@@ -9,6 +9,13 @@ pub enum Screen {
     Dashboard,
     Targets,
     Subdomains,
+    TargetMenu,
+    IPs,
+    ASNs,
+    SubdomainMenu,
+    URLs,
+    Technologies,
+    Screenshots,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +67,39 @@ pub struct App {
     // Edição inline de subdomain
     pub editing_notes: bool,
     pub form_notes: String,
+
+    // Estado do menu de target
+    pub target_menu_selected: usize,
+
+    // Estado de IPs
+    pub ips: Vec<crate::db::models::Ip>,
+    pub ip_selected: usize,
+    pub creating_ip: bool,
+
+    // Estado de ASNs
+    pub asns: Vec<crate::db::models::Asn>,
+    pub asn_selected: usize,
+    pub creating_asn: bool,
+    pub form_org: String,
+
+    // Estado do menu de subdomain
+    pub subdomain_menu_selected: usize,
+
+    // Estado de URLs
+    pub urls: Vec<crate::db::models::Url>,
+    pub url_selected: usize,
+    pub creating_url: bool,
+    pub form_url_type: crate::db::models::UrlType,
+
+    // Estado de Technologies
+    pub technologies: Vec<crate::db::models::Technology>,
+    pub technology_selected: usize,
+    pub creating_technology: bool,
+    pub form_version: String,
+
+    // Estado de Screenshots
+    pub screenshots: Vec<crate::db::models::Screenshot>,
+    pub creating_screenshot: bool,
 }
 
 impl App {
@@ -90,6 +130,25 @@ impl App {
             subdomain_filter: None,
             editing_notes: false,
             form_notes: String::new(),
+            target_menu_selected: 0,
+            ips: Vec::new(),
+            ip_selected: 0,
+            creating_ip: false,
+            asns: Vec::new(),
+            asn_selected: 0,
+            creating_asn: false,
+            form_org: String::new(),
+            subdomain_menu_selected: 0,
+            urls: Vec::new(),
+            url_selected: 0,
+            creating_url: false,
+            form_url_type: crate::db::models::UrlType::Other,
+            technologies: Vec::new(),
+            technology_selected: 0,
+            creating_technology: false,
+            form_version: String::new(),
+            screenshots: Vec::new(),
+            creating_screenshot: false,
         }
     }
 
@@ -235,6 +294,130 @@ impl App {
                 .filter(|s| &s.status == status)
                 .collect(),
         }
+    }
+
+    pub fn target_menu_items() -> Vec<&'static str> {
+        vec!["Subdomains", "IPs", "ASNs"]
+    }
+
+    pub fn target_menu_next(&mut self) {
+        let len = Self::target_menu_items().len();
+        self.target_menu_selected = (self.target_menu_selected + 1) % len;
+    }
+
+    pub fn target_menu_previous(&mut self) {
+        let len = Self::target_menu_items().len();
+        if self.target_menu_selected == 0 {
+            self.target_menu_selected = len - 1;
+        } else {
+            self.target_menu_selected -= 1;
+        }
+    }
+
+    pub fn subdomain_menu_items() -> Vec<&'static str> {
+        vec!["URLs", "Technologies", "Screenshots"]
+    }
+
+    pub fn subdomain_menu_next(&mut self) {
+        let len = Self::subdomain_menu_items().len();
+        self.subdomain_menu_selected = (self.subdomain_menu_selected + 1) % len;
+    }
+
+    pub fn subdomain_menu_previous(&mut self) {
+        let len = Self::subdomain_menu_items().len();
+        if self.subdomain_menu_selected == 0 {
+            self.subdomain_menu_selected = len - 1;
+        } else {
+            self.subdomain_menu_selected -= 1;
+        }
+    }
+
+    pub fn ips_next(&mut self) {
+        if self.ips.is_empty() {
+            return;
+        }
+        self.ip_selected = (self.ip_selected + 1) % self.ips.len();
+    }
+
+    pub fn ips_previous(&mut self) {
+        if self.ips.is_empty() {
+            return;
+        }
+        if self.ip_selected == 0 {
+            self.ip_selected = self.ips.len() - 1;
+        } else {
+            self.ip_selected -= 1;
+        }
+    }
+
+    pub fn selected_ip(&self) -> Option<&crate::db::models::Ip> {
+        self.ips.get(self.ip_selected)
+    }
+
+    pub fn asns_next(&mut self) {
+        if self.asns.is_empty() {
+            return;
+        }
+        self.asn_selected = (self.asn_selected + 1) % self.asns.len();
+    }
+
+    pub fn asns_previous(&mut self) {
+        if self.asns.is_empty() {
+            return;
+        }
+        if self.asn_selected == 0 {
+            self.asn_selected = self.asns.len() - 1;
+        } else {
+            self.asn_selected -= 1;
+        }
+    }
+
+    pub fn selected_asn(&self) -> Option<&crate::db::models::Asn> {
+        self.asns.get(self.asn_selected)
+    }
+
+    pub fn urls_next(&mut self) {
+        if self.urls.is_empty() {
+            return;
+        }
+        self.url_selected = (self.url_selected + 1) % self.urls.len();
+    }
+
+    pub fn urls_previous(&mut self) {
+        if self.urls.is_empty() {
+            return;
+        }
+        if self.url_selected == 0 {
+            self.url_selected = self.urls.len() - 1;
+        } else {
+            self.url_selected -= 1;
+        }
+    }
+
+    pub fn selected_url(&self) -> Option<&crate::db::models::Url> {
+        self.urls.get(self.url_selected)
+    }
+
+    pub fn technologies_next(&mut self) {
+        if self.technologies.is_empty() {
+            return;
+        }
+        self.technology_selected = (self.technology_selected + 1) % self.technologies.len();
+    }
+
+    pub fn technologies_previous(&mut self) {
+        if self.technologies.is_empty() {
+            return;
+        }
+        if self.technology_selected == 0 {
+            self.technology_selected = self.technologies.len() - 1;
+        } else {
+            self.technology_selected -= 1;
+        }
+    }
+
+    pub fn selected_technology(&self) -> Option<&crate::db::models::Technology> {
+        self.technologies.get(self.technology_selected)
     }
 }
 
@@ -736,5 +919,286 @@ mod tests {
     fn test_editing_notes_inicia_false() {
         let app = App::new();
         assert!(!app.editing_notes);
+    }
+
+    // ── testes de target menu ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_target_menu_tem_3_itens() {
+        assert_eq!(App::target_menu_items().len(), 3);
+    }
+
+    #[test]
+    fn test_target_menu_next_wrap() {
+        let mut app = App::new();
+        let total = App::target_menu_items().len();
+        for _ in 0..total {
+            app.target_menu_next();
+        }
+        assert_eq!(app.target_menu_selected, 0);
+    }
+
+    #[test]
+    fn test_target_menu_previous_wrap() {
+        let mut app = App::new();
+        app.target_menu_previous();
+        assert_eq!(app.target_menu_selected, App::target_menu_items().len() - 1);
+    }
+
+    // ── testes de subdomain menu ──────────────────────────────────────────────
+
+    #[test]
+    fn test_subdomain_menu_tem_3_itens() {
+        assert_eq!(App::subdomain_menu_items().len(), 3);
+    }
+
+    #[test]
+    fn test_subdomain_menu_next_wrap() {
+        let mut app = App::new();
+        let total = App::subdomain_menu_items().len();
+        for _ in 0..total {
+            app.subdomain_menu_next();
+        }
+        assert_eq!(app.subdomain_menu_selected, 0);
+    }
+
+    #[test]
+    fn test_subdomain_menu_previous_wrap() {
+        let mut app = App::new();
+        app.subdomain_menu_previous();
+        assert_eq!(
+            app.subdomain_menu_selected,
+            App::subdomain_menu_items().len() - 1
+        );
+    }
+
+    // ── testes de IPs ─────────────────────────────────────────────────────────
+
+    fn make_ip(ip: &str) -> crate::db::models::Ip {
+        crate::db::models::Ip {
+            id: uuid::Uuid::new_v4().to_string(),
+            target_id: uuid::Uuid::new_v4().to_string(),
+            ip: ip.to_string(),
+            created_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    #[test]
+    fn test_ips_next_navega() {
+        let mut app = App::new();
+        app.ips = vec![make_ip("1.1.1.1"), make_ip("2.2.2.2"), make_ip("3.3.3.3")];
+        app.ips_next();
+        assert_eq!(app.ip_selected, 1);
+    }
+
+    #[test]
+    fn test_ips_next_wrap() {
+        let mut app = App::new();
+        app.ips = vec![make_ip("1.1.1.1"), make_ip("2.2.2.2")];
+        app.ip_selected = 1;
+        app.ips_next();
+        assert_eq!(app.ip_selected, 0);
+    }
+
+    #[test]
+    fn test_ips_previous_wrap() {
+        let mut app = App::new();
+        app.ips = vec![make_ip("1.1.1.1"), make_ip("2.2.2.2")];
+        app.ips_previous();
+        assert_eq!(app.ip_selected, 1);
+    }
+
+    #[test]
+    fn test_ips_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.ips_next();
+        app.ips_previous();
+        assert_eq!(app.ip_selected, 0);
+    }
+
+    #[test]
+    fn test_selected_ip_retorna_correto() {
+        let mut app = App::new();
+        let ip = make_ip("8.8.8.8");
+        app.ips = vec![make_ip("1.1.1.1"), ip.clone()];
+        app.ip_selected = 1;
+        assert_eq!(app.selected_ip().unwrap().ip, "8.8.8.8");
+    }
+
+    #[test]
+    fn test_selected_ip_vazio_retorna_none() {
+        let app = App::new();
+        assert!(app.selected_ip().is_none());
+    }
+
+    // ── testes de ASNs ────────────────────────────────────────────────────────
+
+    fn make_asn(asn: &str) -> crate::db::models::Asn {
+        crate::db::models::Asn {
+            id: uuid::Uuid::new_v4().to_string(),
+            target_id: uuid::Uuid::new_v4().to_string(),
+            asn: asn.to_string(),
+            org: None,
+            created_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    #[test]
+    fn test_asns_next_navega() {
+        let mut app = App::new();
+        app.asns = vec![make_asn("AS111"), make_asn("AS222"), make_asn("AS333")];
+        app.asns_next();
+        assert_eq!(app.asn_selected, 1);
+    }
+
+    #[test]
+    fn test_asns_next_wrap() {
+        let mut app = App::new();
+        app.asns = vec![make_asn("AS111"), make_asn("AS222")];
+        app.asn_selected = 1;
+        app.asns_next();
+        assert_eq!(app.asn_selected, 0);
+    }
+
+    #[test]
+    fn test_asns_previous_wrap() {
+        let mut app = App::new();
+        app.asns = vec![make_asn("AS111"), make_asn("AS222")];
+        app.asns_previous();
+        assert_eq!(app.asn_selected, 1);
+    }
+
+    #[test]
+    fn test_asns_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.asns_next();
+        app.asns_previous();
+        assert_eq!(app.asn_selected, 0);
+    }
+
+    #[test]
+    fn test_selected_asn_retorna_correto() {
+        let mut app = App::new();
+        let asn = make_asn("AS99999");
+        app.asns = vec![make_asn("AS111"), asn.clone()];
+        app.asn_selected = 1;
+        assert_eq!(app.selected_asn().unwrap().asn, "AS99999");
+    }
+
+    #[test]
+    fn test_selected_asn_vazio_retorna_none() {
+        let app = App::new();
+        assert!(app.selected_asn().is_none());
+    }
+
+    // ── testes de URLs ────────────────────────────────────────────────────────
+
+    fn make_url(url: &str) -> crate::db::models::Url {
+        crate::db::models::Url {
+            id: uuid::Uuid::new_v4().to_string(),
+            subdomain_id: uuid::Uuid::new_v4().to_string(),
+            url: url.to_string(),
+            url_type: crate::db::models::UrlType::Other,
+            created_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    #[test]
+    fn test_urls_next_navega() {
+        let mut app = App::new();
+        app.urls = vec![make_url("https://a.com"), make_url("https://b.com")];
+        app.urls_next();
+        assert_eq!(app.url_selected, 1);
+    }
+
+    #[test]
+    fn test_urls_next_wrap() {
+        let mut app = App::new();
+        app.urls = vec![make_url("https://a.com"), make_url("https://b.com")];
+        app.url_selected = 1;
+        app.urls_next();
+        assert_eq!(app.url_selected, 0);
+    }
+
+    #[test]
+    fn test_urls_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.urls_next();
+        app.urls_previous();
+        assert_eq!(app.url_selected, 0);
+    }
+
+    #[test]
+    fn test_selected_url_retorna_correto() {
+        let mut app = App::new();
+        let url = make_url("https://api.empresa.com/v1");
+        app.urls = vec![make_url("https://a.com"), url.clone()];
+        app.url_selected = 1;
+        assert_eq!(
+            app.selected_url().unwrap().url,
+            "https://api.empresa.com/v1"
+        );
+    }
+
+    #[test]
+    fn test_selected_url_vazio_retorna_none() {
+        let app = App::new();
+        assert!(app.selected_url().is_none());
+    }
+
+    // ── testes de Technologies ────────────────────────────────────────────────
+
+    fn make_technology(name: &str) -> crate::db::models::Technology {
+        crate::db::models::Technology {
+            id: uuid::Uuid::new_v4().to_string(),
+            subdomain_id: uuid::Uuid::new_v4().to_string(),
+            name: name.to_string(),
+            version: None,
+            created_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    #[test]
+    fn test_technologies_next_navega() {
+        let mut app = App::new();
+        app.technologies = vec![
+            make_technology("WordPress"),
+            make_technology("React"),
+            make_technology("Nginx"),
+        ];
+        app.technologies_next();
+        assert_eq!(app.technology_selected, 1);
+    }
+
+    #[test]
+    fn test_technologies_next_wrap() {
+        let mut app = App::new();
+        app.technologies = vec![make_technology("WordPress"), make_technology("React")];
+        app.technology_selected = 1;
+        app.technologies_next();
+        assert_eq!(app.technology_selected, 0);
+    }
+
+    #[test]
+    fn test_technologies_vazio_nao_crasha() {
+        let mut app = App::new();
+        app.technologies_next();
+        app.technologies_previous();
+        assert_eq!(app.technology_selected, 0);
+    }
+
+    #[test]
+    fn test_selected_technology_retorna_correto() {
+        let mut app = App::new();
+        let tech = make_technology("Laravel");
+        app.technologies = vec![make_technology("WordPress"), tech.clone()];
+        app.technology_selected = 1;
+        assert_eq!(app.selected_technology().unwrap().name, "Laravel");
+    }
+
+    #[test]
+    fn test_selected_technology_vazio_retorna_none() {
+        let app = App::new();
+        assert!(app.selected_technology().is_none());
     }
 }
