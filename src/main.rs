@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_imports)]
 
 use chrono;
+use db::models::SubdomainStatus;
 use uuid;
 mod app;
 mod auth;
@@ -35,7 +36,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::ListEngagements => ui::list_engagements::draw(f, app),
                 Screen::Dashboard => ui::dashboard::draw(f, app),
                 Screen::Targets => ui::targets::draw(f, app),
-                Screen::Subdomains => ui::list_engagements::draw(f, app), // placeholder
+                Screen::Subdomains => ui::subdomains::draw(f, app),
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -60,7 +61,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::ListEngagements => handle_list_engagements(key.code, app)?,
                     Screen::Dashboard => handle_dashboard(key.code, app)?,
                     Screen::Targets => handle_targets(key.code, app)?,
-                    Screen::Subdomains => {} // placeholder
+                    Screen::Subdomains => handle_subdomains(key.code, app)?,
                 }
             }
         }
@@ -257,7 +258,6 @@ fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
         KeyCode::Enter => {
             match app.dashboard_selected {
                 0 => {
-                    // Targets
                     if let Some(eng) = &app.current_engagement {
                         let eng_id = eng.id.clone();
                         if let Some(db) = &app.db {
@@ -269,7 +269,31 @@ fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
                     app.creating_target = false;
                     app.screen = Screen::Targets;
                 }
-                _ => {} // outras seções virão nas próximas fases
+                1 => {
+                    // Subdomains — precisa de um target selecionado
+                    if let Some(target) = app.current_target.clone() {
+                        if let Some(db) = &app.db {
+                            app.subdomains =
+                                db::queries::list_subdomains(db, &target.id).unwrap_or_default();
+                        }
+                        app.subdomain_selected = 0;
+                        app.subdomain_filter = None;
+                        app.creating_subdomain = false;
+                        app.screen = Screen::Subdomains;
+                    } else {
+                        // Sem target selecionado, vai para targets primeiro
+                        if let Some(eng) = &app.current_engagement {
+                            let eng_id = eng.id.clone();
+                            if let Some(db) = &app.db {
+                                app.targets =
+                                    db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                            }
+                        }
+                        app.target_selected = 0;
+                        app.screen = Screen::Targets;
+                    }
+                }
+                _ => {}
             }
         }
         _ => {}
@@ -328,7 +352,6 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
         match key {
             KeyCode::Esc => {
                 app.screen = Screen::Dashboard;
-                // Recarrega targets no painel do dashboard
                 if let Some(eng) = &app.current_engagement {
                     let eng_id = eng.id.clone();
                     if let Some(db) = &app.db {
@@ -342,6 +365,19 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
                 app.reset_form();
                 app.creating_target = true;
             }
+            KeyCode::Enter => {
+                if let Some(target) = app.selected_target().cloned() {
+                    if let Some(db) = &app.db {
+                        app.subdomains =
+                            db::queries::list_subdomains(db, &target.id).unwrap_or_default();
+                    }
+                    app.current_target = Some(target);
+                    app.subdomain_selected = 0;
+                    app.subdomain_filter = None;
+                    app.creating_subdomain = false;
+                    app.screen = Screen::Subdomains;
+                }
+            }
             KeyCode::Char('d') => {
                 if let Some(target) = app.selected_target().cloned() {
                     if let Some(db) = &app.db {
@@ -354,6 +390,160 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
                         app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
                         if app.target_selected >= app.targets.len() && !app.targets.is_empty() {
                             app.target_selected = app.targets.len() - 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.creating_subdomain {
+        match key {
+            KeyCode::Esc => {
+                app.creating_subdomain = false;
+                app.reset_form();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Subdomain é obrigatório".to_string());
+                    return Ok(());
+                }
+
+                let target_id = match &app.current_target {
+                    Some(t) => t.id.clone(),
+                    None => return Ok(()),
+                };
+
+                let new = db::models::NewSubdomain {
+                    target_id: target_id.clone(),
+                    subdomain: app.form_name.trim().to_string(),
+                    status_code: None,
+                    title: None,
+                };
+
+                match db::queries::create_subdomain(app.db.as_ref().unwrap(), new) {
+                    Ok(_) => {
+                        app.creating_subdomain = false;
+                        app.reset_form();
+                        if let Some(db) = &app.db {
+                            app.subdomains =
+                                db::queries::list_subdomains(db, &target_id).unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("Subdomain já existe neste target".to_string());
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
+            }
+            _ => {}
+        }
+    } else if app.editing_notes {
+        match key {
+            KeyCode::Esc => {
+                app.editing_notes = false;
+                app.form_notes.clear();
+            }
+            KeyCode::Enter => {
+                if let Some(sub) = app.selected_subdomain().cloned() {
+                    let update = db::models::UpdateSubdomain {
+                        status: None,
+                        notes: Some(app.form_notes.clone()),
+                        status_code: None,
+                        title: None,
+                    };
+                    if let Some(db) = &app.db {
+                        db::queries::update_subdomain(db, &sub.id, update).ok();
+                        let target_id = sub.target_id.clone();
+                        app.subdomains =
+                            db::queries::list_subdomains(db, &target_id).unwrap_or_default();
+                    }
+                }
+                app.editing_notes = false;
+                app.form_notes.clear();
+            }
+            KeyCode::Backspace => {
+                app.form_notes.pop();
+            }
+            KeyCode::Char(c) => {
+                app.form_notes.push(c);
+            }
+            _ => {}
+        }
+    } else {
+        match key {
+            KeyCode::Esc => {
+                app.screen = Screen::Targets;
+                app.subdomain_filter = None;
+            }
+            KeyCode::Down | KeyCode::Char('j') => app.subdomains_next(),
+            KeyCode::Up | KeyCode::Char('k') => app.subdomains_previous(),
+            KeyCode::Char('n') => {
+                app.reset_form();
+                app.creating_subdomain = true;
+            }
+            KeyCode::Char('o') => {
+                if let Some(sub) = app.selected_subdomain() {
+                    app.form_notes = sub.notes.clone().unwrap_or_default();
+                    app.editing_notes = true;
+                }
+            }
+            KeyCode::Char('s') => {
+                // Cicla o status do subdomain selecionado
+                if let Some(sub) = app.selected_subdomain().cloned() {
+                    let next_status = match sub.status {
+                        SubdomainStatus::NotVisited => SubdomainStatus::InProgress,
+                        SubdomainStatus::InProgress => SubdomainStatus::Reviewed,
+                        SubdomainStatus::Reviewed => SubdomainStatus::Vulnerable,
+                        SubdomainStatus::Vulnerable => SubdomainStatus::FalsePositive,
+                        SubdomainStatus::FalsePositive => SubdomainStatus::NotVisited,
+                    };
+                    let update = db::models::UpdateSubdomain {
+                        status: Some(next_status),
+                        notes: None,
+                        status_code: None,
+                        title: None,
+                    };
+                    if let Some(db) = &app.db {
+                        db::queries::update_subdomain(db, &sub.id, update).ok();
+                        app.subdomains =
+                            db::queries::list_subdomains(db, &sub.target_id).unwrap_or_default();
+                    }
+                }
+            }
+            KeyCode::Char('f') => {
+                // Cicla o filtro de status
+                app.subdomain_filter = match &app.subdomain_filter {
+                    None => Some(SubdomainStatus::NotVisited),
+                    Some(SubdomainStatus::NotVisited) => Some(SubdomainStatus::InProgress),
+                    Some(SubdomainStatus::InProgress) => Some(SubdomainStatus::Reviewed),
+                    Some(SubdomainStatus::Reviewed) => Some(SubdomainStatus::Vulnerable),
+                    Some(SubdomainStatus::Vulnerable) => Some(SubdomainStatus::FalsePositive),
+                    Some(SubdomainStatus::FalsePositive) => None,
+                };
+                app.subdomain_selected = 0;
+            }
+            KeyCode::Char('d') => {
+                if let Some(sub) = app.selected_subdomain().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_subdomain(db, &sub.id).ok();
+                        app.subdomains =
+                            db::queries::list_subdomains(db, &sub.target_id).unwrap_or_default();
+                        if app.subdomain_selected >= app.subdomains.len()
+                            && !app.subdomains.is_empty()
+                        {
+                            app.subdomain_selected = app.subdomains.len() - 1;
                         }
                     }
                 }
