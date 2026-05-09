@@ -38,12 +38,19 @@ pub fn draw(f: &mut Frame, app: &App) {
         draw_form(f, app, chunks[2]);
     } else {
         draw_list(f, app, chunks[2]);
+        // Erro/aviso
+        if let Some(err) = &app.form_error {
+            let err_widget = Paragraph::new(format!("⚠ {}", err))
+                .style(Style::default().fg(Color::Red))
+                .alignment(Alignment::Center);
+            f.render_widget(err_widget, chunks[1]);
+        }
     }
 
     let hint = if app.creating_screenshot {
         "Enter confirmar  •  Esc cancelar"
     } else {
-        "N novo  •  D deletar  •  Esc voltar"
+        "N novo  •  Enter preview  •  O abrir externo  •  D deletar  •  Esc voltar"
     };
     let hint_widget = Paragraph::new(hint)
         .style(Style::default().fg(Color::DarkGray))
@@ -63,7 +70,12 @@ fn draw_list(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let items: Vec<ListItem> = app
         .screenshots
         .iter()
-        .map(|s| ListItem::new(format!("  {}", s.file_path)))
+        .map(|s| {
+            let exists = std::path::Path::new(&s.file_path).exists();
+            let icon = if exists { "✓" } else { "✗" };
+            let color = if exists { Color::Green } else { Color::Red };
+            ListItem::new(format!("  {} {}", icon, s.file_path)).style(Style::default().fg(color))
+        })
         .collect();
 
     let list = List::new(items)
@@ -77,9 +89,12 @@ fn draw_list(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 .fg(Color::Black)
                 .bg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
-        );
+        )
+        .highlight_symbol("▶ ");
 
-    f.render_widget(list, area);
+    let mut state = ratatui::widgets::ListState::default();
+    state.select(Some(app.screenshot_selected));
+    f.render_stateful_widget(list, area, &mut state);
 }
 
 fn draw_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {

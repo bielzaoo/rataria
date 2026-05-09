@@ -100,6 +100,7 @@ pub struct App {
     // Estado de Screenshots
     pub screenshots: Vec<crate::db::models::Screenshot>,
     pub creating_screenshot: bool,
+    pub screenshot_selected: usize,
 }
 
 impl App {
@@ -149,6 +150,7 @@ impl App {
             form_version: String::new(),
             screenshots: Vec::new(),
             creating_screenshot: false,
+            screenshot_selected: 0,
         }
     }
 
@@ -418,6 +420,24 @@ impl App {
 
     pub fn selected_technology(&self) -> Option<&crate::db::models::Technology> {
         self.technologies.get(self.technology_selected)
+    }
+
+    pub fn screenshots_next(&mut self) {
+        if self.screenshots.is_empty() {
+            return;
+        }
+        self.screenshot_selected = (self.screenshot_selected + 1) % self.screenshots.len();
+    }
+
+    pub fn screenshots_previous(&mut self) {
+        if self.screenshots.is_empty() {
+            return;
+        }
+        if self.screenshot_selected == 0 {
+            self.screenshot_selected = self.screenshots.len() - 1;
+        } else {
+            self.screenshot_selected -= 1;
+        }
     }
 }
 

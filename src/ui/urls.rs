@@ -104,7 +104,7 @@ fn draw_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::DarkGray)),
         )
-        .highlight_style(
+        .row_highlight_style(
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Yellow)

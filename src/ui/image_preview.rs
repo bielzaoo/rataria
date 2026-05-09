@@ -2,6 +2,18 @@ use std::path::Path;
 
 /// Verifica se o terminal suporta o protocolo Kitty Graphics
 pub fn is_kitty_supported() -> bool {
+    // Dentro do tmux, verifica se kitten está disponível
+    let in_tmux = std::env::var("TMUX").is_ok();
+
+    if in_tmux {
+        // Verifica se kitten icat está disponível
+        return std::process::Command::new("kitten")
+            .arg("--version")
+            .output()
+            .is_ok();
+    }
+
+    // Fora do tmux, verifica variáveis do Kitty
     std::env::var("KITTY_WINDOW_ID").is_ok()
         || std::env::var("TERM")
             .map(|t| t.contains("kitty"))
@@ -29,62 +41,74 @@ pub fn is_valid_image(path: &str) -> bool {
 /// Renderiza a imagem via protocolo Kitty diretamente no stdout
 /// Suspende a TUI, exibe a imagem e aguarda Enter para voltar
 pub fn show_kitty_preview(path: &str) -> std::io::Result<()> {
+    use crossterm::{
+        cursor::MoveTo,
+        execute,
+        terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+    };
     use std::io::Write;
 
-    let data = std::fs::read(path)?;
-    let encoded = base64_encode(&data);
+    disable_raw_mode()?;
 
-    // Suspende a TUI
-    crossterm::terminal::disable_raw_mode()?;
     let mut stdout = std::io::stdout();
+    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+    stdout.flush()?;
 
-    // Limpa a tela
-    write!(stdout, "\x1b[2J\x1b[H")?;
+    // Usa kitten icat — funciona dentro do tmux
+    let status = std::process::Command::new("kitten")
+        .args(["icat", "--align", "left", path])
+        .status();
 
-    // Protocolo Kitty: transmite a imagem em chunks de 4096 bytes
-    let chunk_size = 4096;
-    let chunks: Vec<&str> = encoded
-        .as_bytes()
-        .chunks(chunk_size)
-        .map(|c| std::str::from_utf8(c).unwrap_or(""))
-        .collect();
-
-    for (i, chunk) in chunks.iter().enumerate() {
-        let is_last = i == chunks.len() - 1;
-        let more = if is_last { 0 } else { 1 };
-
-        if i == 0 {
-            // Primeiro chunk: inclui os parâmetros (formato PNG/auto, ação display)
-            write!(stdout, "\x1b_Ga=T,f=100,m={};{}\x1b\\", more, chunk)?;
-        } else {
-            write!(stdout, "\x1b_Gm={};{}\x1b\\", more, chunk)?;
+    match status {
+        Ok(_) => {}
+        Err(_) => {
+            // Fallback: tenta o protocolo direto se kitten não estiver disponível
+            write!(
+                stdout,
+                "  kitten não encontrado. Use O para abrir externamente.\n"
+            )?;
+            stdout.flush()?;
         }
     }
 
+    write!(stdout, "\r\n  Pressione Enter ou Esc para voltar...")?;
     stdout.flush()?;
 
-    // Mensagem e aguarda Enter
-    write!(stdout, "\n\n  Pressione Enter para voltar...")?;
-    stdout.flush()?;
+    enable_raw_mode()?;
 
-    // Aguarda Enter
-    crossterm::terminal::enable_raw_mode()?;
     loop {
-        if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
-            if key.code == crossterm::event::KeyCode::Enter
-                || key.code == crossterm::event::KeyCode::Esc
-            {
-                break;
-            }
+        match crossterm::event::read()? {
+            crossterm::event::Event::Key(key) => match key.code {
+                crossterm::event::KeyCode::Enter
+                | crossterm::event::KeyCode::Esc
+                | crossterm::event::KeyCode::Char('q') => break,
+                _ => {}
+            },
+            _ => {}
         }
     }
 
-    // Limpa a imagem do terminal Kitty
-    let mut stdout = std::io::stdout();
-    write!(stdout, "\x1b_Ga=d\x1b\\")?;
-    stdout.flush()?;
+    disable_raw_mode()?;
+    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+    enable_raw_mode()?;
 
     Ok(())
+}
+
+/// Detecta o formato da imagem pelo magic bytes
+/// Retorna o código de formato do protocolo Kitty:
+/// 32 = RGBA, 24 = RGB, 100 = PNG
+fn detect_format(data: &[u8]) -> u8 {
+    if data.len() >= 8 && &data[0..8] == b"\x89PNG\r\n\x1a\n" {
+        return 100; // PNG
+    }
+    if data.len() >= 3 && &data[0..3] == b"\xff\xd8\xff" {
+        return 100; // JPEG — Kitty aceita como 100 também
+    }
+    if data.len() >= 6 && (&data[0..6] == b"GIF87a" || &data[0..6] == b"GIF89a") {
+        return 100; // GIF
+    }
+    100 // fallback
 }
 
 /// Abre o arquivo com o visualizador padrão do sistema
@@ -205,5 +229,23 @@ mod tests {
     fn test_is_kitty_supported_retorna_bool() {
         // Apenas verifica que a função roda sem panic
         let _ = is_kitty_supported();
+    }
+
+    #[test]
+    fn test_detect_format_png() {
+        let png_header = b"\x89PNG\r\n\x1a\n rest of data";
+        assert_eq!(detect_format(png_header), 100);
+    }
+
+    #[test]
+    fn test_detect_format_jpeg() {
+        let jpg_header = b"\xff\xd8\xff rest of data";
+        assert_eq!(detect_format(jpg_header), 100);
+    }
+
+    #[test]
+    fn test_detect_format_fallback() {
+        let unknown = b"unknown format";
+        assert_eq!(detect_format(unknown), 100);
     }
 }
