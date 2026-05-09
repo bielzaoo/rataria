@@ -37,13 +37,13 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::Dashboard => ui::dashboard::draw(f, app),
                 Screen::Targets => ui::targets::draw(f, app),
                 Screen::Subdomains => ui::subdomains::draw(f, app),
-                Screen::TargetMenu => ui::dashboard::draw(f, app), // placeholder
-                Screen::IPs => ui::dashboard::draw(f, app),        // placeholder
-                Screen::ASNs => ui::dashboard::draw(f, app),       // placeholder
-                Screen::SubdomainMenu => ui::dashboard::draw(f, app), // placeholder
-                Screen::URLs => ui::dashboard::draw(f, app),       // placeholder
-                Screen::Technologies => ui::dashboard::draw(f, app), // placeholder
-                Screen::Screenshots => ui::dashboard::draw(f, app), // placeholder
+                Screen::TargetMenu => ui::target_menu::draw(f, app),
+                Screen::IPs => ui::ips::draw(f, app),
+                Screen::ASNs => ui::asns::draw(f, app),
+                Screen::SubdomainMenu => ui::subdomain_menu::draw(f, app),
+                Screen::URLs => ui::urls::draw(f, app),
+                Screen::Technologies => ui::technologies::draw(f, app),
+                Screen::Screenshots => ui::screenshots::draw(f, app),
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -51,7 +51,6 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     e.to_string(),
                 ))
             })?;
-
         if event::poll(std::time::Duration::from_millis(16))
             .map_err(error::RatariaError::IoError)?
         {
@@ -69,13 +68,13 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::Dashboard => handle_dashboard(key.code, app)?,
                     Screen::Targets => handle_targets(key.code, app)?,
                     Screen::Subdomains => handle_subdomains(key.code, app)?,
-                    Screen::TargetMenu => {}
-                    Screen::IPs => {}
-                    Screen::ASNs => {}
-                    Screen::SubdomainMenu => {}
-                    Screen::URLs => {}
-                    Screen::Technologies => {}
-                    Screen::Screenshots => {}
+                    Screen::TargetMenu => handle_target_menu(key.code, app)?,
+                    Screen::IPs => handle_ips(key.code, app)?,
+                    Screen::ASNs => handle_asns(key.code, app)?,
+                    Screen::SubdomainMenu => handle_subdomain_menu(key.code, app)?,
+                    Screen::URLs => handle_urls(key.code, app)?,
+                    Screen::Technologies => handle_technologies(key.code, app)?,
+                    Screen::Screenshots => handle_screenshots(key.code, app)?,
                 }
             }
         }
@@ -327,17 +326,14 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
                     app.form_error = Some("Domínio é obrigatório".to_string());
                     return Ok(());
                 }
-
                 let eng_id = match &app.current_engagement {
                     Some(e) => e.id.clone(),
                     None => return Ok(()),
                 };
-
                 let new = db::models::NewTarget {
                     engagement_id: eng_id.clone(),
                     domain: app.form_name.trim().to_string(),
                 };
-
                 match db::queries::create_target(app.db.as_ref().unwrap(), new) {
                     Ok(_) => {
                         app.creating_target = false;
@@ -384,12 +380,12 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
                     if let Some(db) = &app.db {
                         app.subdomains =
                             db::queries::list_subdomains(db, &target.id).unwrap_or_default();
+                        app.ips = db::queries::list_ips(db, &target.id).unwrap_or_default();
+                        app.asns = db::queries::list_asns(db, &target.id).unwrap_or_default();
                     }
                     app.current_target = Some(target);
-                    app.subdomain_selected = 0;
-                    app.subdomain_filter = None;
-                    app.creating_subdomain = false;
-                    app.screen = Screen::Subdomains;
+                    app.target_menu_selected = 0;
+                    app.screen = Screen::TargetMenu;
                 }
             }
             KeyCode::Char('d') => {
@@ -426,19 +422,16 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                     app.form_error = Some("Subdomain é obrigatório".to_string());
                     return Ok(());
                 }
-
                 let target_id = match &app.current_target {
                     Some(t) => t.id.clone(),
                     None => return Ok(()),
                 };
-
                 let new = db::models::NewSubdomain {
                     target_id: target_id.clone(),
                     subdomain: app.form_name.trim().to_string(),
                     status_code: None,
                     title: None,
                 };
-
                 match db::queries::create_subdomain(app.db.as_ref().unwrap(), new) {
                     Ok(_) => {
                         app.creating_subdomain = false;
@@ -479,9 +472,8 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                     };
                     if let Some(db) = &app.db {
                         db::queries::update_subdomain(db, &sub.id, update).ok();
-                        let target_id = sub.target_id.clone();
                         app.subdomains =
-                            db::queries::list_subdomains(db, &target_id).unwrap_or_default();
+                            db::queries::list_subdomains(db, &sub.target_id).unwrap_or_default();
                     }
                 }
                 app.editing_notes = false;
@@ -498,11 +490,25 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
     } else {
         match key {
             KeyCode::Esc => {
-                app.screen = Screen::Targets;
+                app.screen = Screen::TargetMenu;
                 app.subdomain_filter = None;
             }
             KeyCode::Down | KeyCode::Char('j') => app.subdomains_next(),
             KeyCode::Up | KeyCode::Char('k') => app.subdomains_previous(),
+            KeyCode::Enter => {
+                if let Some(sub) = app.selected_subdomain().cloned() {
+                    if let Some(db) = &app.db {
+                        app.urls = db::queries::list_urls(db, &sub.id).unwrap_or_default();
+                        app.technologies =
+                            db::queries::list_technologies(db, &sub.id).unwrap_or_default();
+                        app.screenshots = db::queries::list_screenshots_by_subdomain(db, &sub.id)
+                            .unwrap_or_default();
+                    }
+                    app.current_subdomain = Some(sub);
+                    app.subdomain_menu_selected = 0;
+                    app.screen = Screen::SubdomainMenu;
+                }
+            }
             KeyCode::Char('n') => {
                 app.reset_form();
                 app.creating_subdomain = true;
@@ -514,7 +520,6 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                 }
             }
             KeyCode::Char('s') => {
-                // Cicla o status do subdomain selecionado
                 if let Some(sub) = app.selected_subdomain().cloned() {
                     let next_status = match sub.status {
                         SubdomainStatus::NotVisited => SubdomainStatus::InProgress,
@@ -537,7 +542,6 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                 }
             }
             KeyCode::Char('f') => {
-                // Cicla o filtro de status
                 app.subdomain_filter = match &app.subdomain_filter {
                     None => Some(SubdomainStatus::NotVisited),
                     Some(SubdomainStatus::NotVisited) => Some(SubdomainStatus::InProgress),
@@ -559,6 +563,482 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                         {
                             app.subdomain_selected = app.subdomains.len() - 1;
                         }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn handle_target_menu(key: KeyCode, app: &mut App) -> Result<()> {
+    match key {
+        KeyCode::Esc => {
+            app.screen = Screen::Targets;
+        }
+        KeyCode::Down | KeyCode::Char('j') => app.target_menu_next(),
+        KeyCode::Up | KeyCode::Char('k') => app.target_menu_previous(),
+        KeyCode::Enter => {
+            match app.target_menu_selected {
+                0 => {
+                    // Subdomains
+                    app.subdomain_selected = 0;
+                    app.subdomain_filter = None;
+                    app.creating_subdomain = false;
+                    app.screen = Screen::Subdomains;
+                }
+                1 => {
+                    // IPs
+                    app.ip_selected = 0;
+                    app.creating_ip = false;
+                    app.screen = Screen::IPs;
+                }
+                2 => {
+                    // ASNs
+                    app.asn_selected = 0;
+                    app.creating_asn = false;
+                    app.screen = Screen::ASNs;
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_ips(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.creating_ip {
+        match key {
+            KeyCode::Esc => {
+                app.creating_ip = false;
+                app.reset_form();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("IP é obrigatório".to_string());
+                    return Ok(());
+                }
+                let target_id = match &app.current_target {
+                    Some(t) => t.id.clone(),
+                    None => return Ok(()),
+                };
+                let new = db::models::NewIp {
+                    target_id: target_id.clone(),
+                    ip: app.form_name.trim().to_string(),
+                };
+                match db::queries::create_ip(app.db.as_ref().unwrap(), new) {
+                    Ok(_) => {
+                        app.creating_ip = false;
+                        app.reset_form();
+                        if let Some(db) = &app.db {
+                            app.ips = db::queries::list_ips(db, &target_id).unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("IP já existe neste target".to_string());
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
+            }
+            _ => {}
+        }
+    } else {
+        match key {
+            KeyCode::Esc => {
+                app.screen = Screen::TargetMenu;
+            }
+            KeyCode::Down | KeyCode::Char('j') => app.ips_next(),
+            KeyCode::Up | KeyCode::Char('k') => app.ips_previous(),
+            KeyCode::Char('n') => {
+                app.reset_form();
+                app.creating_ip = true;
+            }
+            KeyCode::Char('d') => {
+                if let Some(ip) = app.selected_ip().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_ip(db, &ip.id).ok();
+                        app.ips = db::queries::list_ips(db, &ip.target_id).unwrap_or_default();
+                        if app.ip_selected >= app.ips.len() && !app.ips.is_empty() {
+                            app.ip_selected = app.ips.len() - 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.creating_asn {
+        match key {
+            KeyCode::Esc => {
+                app.creating_asn = false;
+                app.reset_form();
+                app.form_org.clear();
+            }
+            KeyCode::Tab => {
+                app.form_next_field();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("ASN é obrigatório".to_string());
+                    return Ok(());
+                }
+                let target_id = match &app.current_target {
+                    Some(t) => t.id.clone(),
+                    None => return Ok(()),
+                };
+                let new = db::models::NewAsn {
+                    target_id: target_id.clone(),
+                    asn: app.form_name.trim().to_string(),
+                    org: if app.form_org.trim().is_empty() {
+                        None
+                    } else {
+                        Some(app.form_org.trim().to_string())
+                    },
+                };
+                match db::queries::create_asn(app.db.as_ref().unwrap(), new) {
+                    Ok(_) => {
+                        app.creating_asn = false;
+                        app.reset_form();
+                        app.form_org.clear();
+                        if let Some(db) = &app.db {
+                            app.asns = db::queries::list_asns(db, &target_id).unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("ASN já existe neste target".to_string());
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                match app.form_field {
+                    app::FormField::Name => {
+                        app.form_name.pop();
+                    }
+                    app::FormField::Description => {
+                        app.form_org.pop();
+                    }
+                }
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                match app.form_field {
+                    app::FormField::Name => app.form_name.push(c),
+                    app::FormField::Description => app.form_org.push(c),
+                }
+                app.form_error = None;
+            }
+            _ => {}
+        }
+    } else {
+        match key {
+            KeyCode::Esc => {
+                app.screen = Screen::TargetMenu;
+            }
+            KeyCode::Down | KeyCode::Char('j') => app.asns_next(),
+            KeyCode::Up | KeyCode::Char('k') => app.asns_previous(),
+            KeyCode::Char('n') => {
+                app.reset_form();
+                app.form_org.clear();
+                app.creating_asn = true;
+            }
+            KeyCode::Char('d') => {
+                if let Some(asn) = app.selected_asn().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_asn(db, &asn.id).ok();
+                        app.asns = db::queries::list_asns(db, &asn.target_id).unwrap_or_default();
+                        if app.asn_selected >= app.asns.len() && !app.asns.is_empty() {
+                            app.asn_selected = app.asns.len() - 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn handle_subdomain_menu(key: KeyCode, app: &mut App) -> Result<()> {
+    match key {
+        KeyCode::Esc => {
+            app.screen = Screen::Subdomains;
+        }
+        KeyCode::Down | KeyCode::Char('j') => app.subdomain_menu_next(),
+        KeyCode::Up | KeyCode::Char('k') => app.subdomain_menu_previous(),
+        KeyCode::Enter => match app.subdomain_menu_selected {
+            0 => {
+                app.url_selected = 0;
+                app.creating_url = false;
+                app.screen = Screen::URLs;
+            }
+            1 => {
+                app.technology_selected = 0;
+                app.creating_technology = false;
+                app.screen = Screen::Technologies;
+            }
+            2 => {
+                app.creating_screenshot = false;
+                app.screen = Screen::Screenshots;
+            }
+            _ => {}
+        },
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_urls(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.creating_url {
+        match key {
+            KeyCode::Esc => {
+                app.creating_url = false;
+                app.reset_form();
+            }
+            KeyCode::Tab => {
+                app.form_url_type = match app.form_url_type {
+                    db::models::UrlType::Parameter => db::models::UrlType::JavaScript,
+                    db::models::UrlType::JavaScript => db::models::UrlType::Endpoint,
+                    db::models::UrlType::Endpoint => db::models::UrlType::Other,
+                    db::models::UrlType::Other => db::models::UrlType::Parameter,
+                };
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("URL é obrigatória".to_string());
+                    return Ok(());
+                }
+                let sub_id = match &app.current_subdomain {
+                    Some(s) => s.id.clone(),
+                    None => return Ok(()),
+                };
+                let new = db::models::NewUrl {
+                    subdomain_id: sub_id.clone(),
+                    url: app.form_name.trim().to_string(),
+                    url_type: app.form_url_type.clone(),
+                };
+                match db::queries::create_url(app.db.as_ref().unwrap(), new) {
+                    Ok(_) => {
+                        app.creating_url = false;
+                        app.reset_form();
+                        if let Some(db) = &app.db {
+                            app.urls = db::queries::list_urls(db, &sub_id).unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("URL já existe neste subdomain".to_string());
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
+            }
+            _ => {}
+        }
+    } else {
+        match key {
+            KeyCode::Esc => {
+                app.screen = Screen::SubdomainMenu;
+            }
+            KeyCode::Down | KeyCode::Char('j') => app.urls_next(),
+            KeyCode::Up | KeyCode::Char('k') => app.urls_previous(),
+            KeyCode::Char('n') => {
+                app.reset_form();
+                app.form_url_type = db::models::UrlType::Other;
+                app.creating_url = true;
+            }
+            KeyCode::Char('d') => {
+                if let Some(url) = app.selected_url().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_url(db, &url.id).ok();
+                        app.urls =
+                            db::queries::list_urls(db, &url.subdomain_id).unwrap_or_default();
+                        if app.url_selected >= app.urls.len() && !app.urls.is_empty() {
+                            app.url_selected = app.urls.len() - 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn handle_technologies(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.creating_technology {
+        match key {
+            KeyCode::Esc => {
+                app.creating_technology = false;
+                app.reset_form();
+                app.form_version.clear();
+            }
+            KeyCode::Tab => {
+                app.form_next_field();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Nome é obrigatório".to_string());
+                    return Ok(());
+                }
+                let sub_id = match &app.current_subdomain {
+                    Some(s) => s.id.clone(),
+                    None => return Ok(()),
+                };
+                let new = db::models::NewTechnology {
+                    subdomain_id: sub_id.clone(),
+                    name: app.form_name.trim().to_string(),
+                    version: if app.form_version.trim().is_empty() {
+                        None
+                    } else {
+                        Some(app.form_version.trim().to_string())
+                    },
+                };
+                match db::queries::create_technology(app.db.as_ref().unwrap(), new) {
+                    Ok(_) => {
+                        app.creating_technology = false;
+                        app.reset_form();
+                        app.form_version.clear();
+                        if let Some(db) = &app.db {
+                            app.technologies =
+                                db::queries::list_technologies(db, &sub_id).unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("Erro ao salvar tecnologia".to_string());
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                match app.form_field {
+                    app::FormField::Name => {
+                        app.form_name.pop();
+                    }
+                    app::FormField::Description => {
+                        app.form_version.pop();
+                    }
+                }
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                match app.form_field {
+                    app::FormField::Name => app.form_name.push(c),
+                    app::FormField::Description => app.form_version.push(c),
+                }
+                app.form_error = None;
+            }
+            _ => {}
+        }
+    } else {
+        match key {
+            KeyCode::Esc => {
+                app.screen = Screen::SubdomainMenu;
+            }
+            KeyCode::Down | KeyCode::Char('j') => app.technologies_next(),
+            KeyCode::Up | KeyCode::Char('k') => app.technologies_previous(),
+            KeyCode::Char('n') => {
+                app.reset_form();
+                app.form_version.clear();
+                app.creating_technology = true;
+            }
+            KeyCode::Char('d') => {
+                if let Some(tech) = app.selected_technology().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_technology(db, &tech.id).ok();
+                        app.technologies = db::queries::list_technologies(db, &tech.subdomain_id)
+                            .unwrap_or_default();
+                        if app.technology_selected >= app.technologies.len()
+                            && !app.technologies.is_empty()
+                        {
+                            app.technology_selected = app.technologies.len() - 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn handle_screenshots(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.creating_screenshot {
+        match key {
+            KeyCode::Esc => {
+                app.creating_screenshot = false;
+                app.reset_form();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Caminho é obrigatório".to_string());
+                    return Ok(());
+                }
+                let sub_id = match &app.current_subdomain {
+                    Some(s) => s.id.clone(),
+                    None => return Ok(()),
+                };
+                let new = db::models::NewScreenshot {
+                    subdomain_id: sub_id.clone(),
+                    file_path: app.form_name.trim().to_string(),
+                };
+                match db::queries::create_screenshot(app.db.as_ref().unwrap(), new) {
+                    Ok(_) => {
+                        app.creating_screenshot = false;
+                        app.reset_form();
+                        if let Some(db) = &app.db {
+                            app.screenshots =
+                                db::queries::list_screenshots_by_subdomain(db, &sub_id)
+                                    .unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("Erro ao salvar screenshot".to_string());
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
+            }
+            _ => {}
+        }
+    } else {
+        match key {
+            KeyCode::Esc => {
+                app.screen = Screen::SubdomainMenu;
+            }
+            KeyCode::Char('n') => {
+                app.reset_form();
+                app.creating_screenshot = true;
+            }
+            KeyCode::Char('d') => {
+                if let Some(shot) = app.screenshots.get(0).cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_screenshot(db, &shot.id).ok();
+                        let sub_id = shot.subdomain_id.clone();
+                        app.screenshots = db::queries::list_screenshots_by_subdomain(db, &sub_id)
+                            .unwrap_or_default();
                     }
                 }
             }

@@ -1,7 +1,14 @@
+pub mod asns;
 pub mod create_engagement;
 pub mod dashboard;
 pub mod home;
+pub mod ips;
 pub mod list_engagements;
 pub mod password;
+pub mod screenshots;
+pub mod subdomain_menu;
 pub mod subdomains;
+pub mod target_menu;
 pub mod targets;
+pub mod technologies;
+pub mod urls;

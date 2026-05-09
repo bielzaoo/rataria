@@ -800,6 +800,31 @@ pub fn delete_screenshot(db: &Database, id: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn list_screenshots_by_subdomain(db: &Database, subdomain_id: &str) -> Result<Vec<Screenshot>> {
+    let mut stmt = db.conn.prepare(
+        "SELECT id, subdomain_id, file_path, created_at
+         FROM screenshots WHERE subdomain_id = ?1 ORDER BY created_at ASC",
+    )?;
+
+    let items = stmt
+        .query_map([subdomain_id], |row| {
+            let created_str: String = row.get(3)?;
+            Ok(Screenshot {
+                id: row.get(0)?,
+                subdomain_id: row.get(1)?,
+                file_path: row.get(2)?,
+                created_at: chrono::NaiveDateTime::parse_from_str(
+                    &created_str,
+                    "%Y-%m-%d %H:%M:%S%.f",
+                )
+                .unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(items)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
