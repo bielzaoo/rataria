@@ -47,7 +47,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::Technologies => ui::technologies::draw(f, app),
                 Screen::Screenshots => ui::screenshots::draw(f, app),
                 Screen::Import => ui::import::draw(f, app),
-                Screen::Help => ui::home::draw(f, app), // placeholder
+                Screen::Help => ui::help::draw(f, app),
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
