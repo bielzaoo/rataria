@@ -7,6 +7,7 @@ mod app;
 mod auth;
 mod db;
 mod error;
+mod export;
 mod import;
 mod ui;
 use app::{App, Screen};
