@@ -7,6 +7,7 @@ mod app;
 mod auth;
 mod db;
 mod error;
+mod import;
 mod ui;
 use app::{App, Screen};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -22,7 +23,7 @@ fn main() -> Result<()> {
     result
 }
 
-fn run(mut terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
+fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
     let db_path = Database::default_path();
 
     loop {

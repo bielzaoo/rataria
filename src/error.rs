@@ -11,6 +11,9 @@ pub enum RatariaError {
     #[error("Não encontrado: {0}")]
     NotFound(String),
 
+    #[error("Erro de importação: {0}")]
+    ImportError(String),
+
     #[error("Erro ao criar diretório de dados: {0}")]
     IoError(#[from] std::io::Error),
 
