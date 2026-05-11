@@ -177,6 +177,7 @@ impl App {
         vec![
             "Abrir engagement existente",
             "Criar novo engagement",
+            "Importar dados",
             "Sair",
         ]
     }
@@ -543,8 +544,8 @@ mod tests {
     }
 
     #[test]
-    fn test_home_menu_tem_3_itens() {
-        assert_eq!(App::home_menu_items().len(), 3);
+    fn test_home_menu_tem_4_itens() {
+        assert_eq!(App::home_menu_items().len(), 4);
     }
 
     // ── testes de formulário ─────────────────────────────────────────────────

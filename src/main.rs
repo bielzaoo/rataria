@@ -45,7 +45,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::URLs => ui::urls::draw(f, app),
                 Screen::Technologies => ui::technologies::draw(f, app),
                 Screen::Screenshots => ui::screenshots::draw(f, app),
-                Screen::Import => ui::list_engagements::draw(f, app), // placeholder
+                Screen::Import => ui::import::draw(f, app),
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -192,7 +192,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::URLs => handle_urls(key.code, app)?,
                     Screen::Technologies => handle_technologies(key.code, app)?,
                     Screen::Screenshots => handle_screenshots(key.code, app, &mut *terminal)?,
-                    Screen::Import => {} // placeholder
+                    Screen::Import => handle_import(key.code, app)?,
                 }
             }
         }
@@ -253,25 +253,25 @@ fn handle_home(key: KeyCode, app: &mut App) {
         KeyCode::Up | KeyCode::Char('k') => {
             app.home_previous();
         }
-        KeyCode::Enter => {
-            match app.home_selected {
-                0 => {
-                    // Abrir engagement existente
-                    if let Some(db) = &app.db {
-                        app.engagements = db::queries::list_engagements(db).unwrap_or_default();
-                        app.engagement_selected = 0;
-                        app.screen = Screen::ListEngagements;
-                    }
+        KeyCode::Enter => match app.home_selected {
+            0 => {
+                if let Some(db) = &app.db {
+                    app.engagements = db::queries::list_engagements(db).unwrap_or_default();
+                    app.engagement_selected = 0;
+                    app.screen = Screen::ListEngagements;
                 }
-                1 => {
-                    // Criar novo engagement
-                    app.reset_form();
-                    app.screen = Screen::CreateEngagement;
-                }
-                2 => app.should_quit = true,
-                _ => {}
             }
-        }
+            1 => {
+                app.reset_form();
+                app.screen = Screen::CreateEngagement;
+            }
+            2 => {
+                app.reset_import_form();
+                app.screen = Screen::Import;
+            }
+            3 => app.should_quit = true,
+            _ => {}
+        },
         _ => {}
     }
 }
@@ -1205,6 +1205,95 @@ fn handle_screenshots(
             }
             _ => {}
         }
+    }
+    Ok(())
+}
+
+fn handle_import(key: KeyCode, app: &mut App) -> Result<()> {
+    match key {
+        KeyCode::Esc => {
+            app.reset_import_form();
+            app.screen = Screen::Home;
+        }
+        KeyCode::Tab => {
+            app.import_field = match app.import_field {
+                app::ImportField::Path => app::ImportField::Target,
+                app::ImportField::Target => app::ImportField::Engagement,
+                app::ImportField::Engagement => app::ImportField::Path,
+            };
+        }
+        KeyCode::Enter => {
+            let path = app.import_path.trim().to_string();
+
+            if path.is_empty() {
+                app.import_result = Some("✗ Caminho do arquivo é obrigatório".to_string());
+                return Ok(());
+            }
+
+            // Lê o arquivo
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    app.import_result = Some(format!("✗ Erro ao ler arquivo: {}", e));
+                    return Ok(());
+                }
+            };
+
+            let filename = std::path::Path::new(&path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+
+            let engagement = if app.import_engagement.trim().is_empty() {
+                app.current_engagement.as_ref().map(|e| e.name.as_str())
+            } else {
+                Some(app.import_engagement.trim())
+            };
+
+            let target = if app.import_target.trim().is_empty() {
+                None
+            } else {
+                Some(app.import_target.trim())
+            };
+
+            let db = app.db.as_ref().unwrap();
+
+            match import::auto_import(db, &content, filename, engagement, target) {
+                Ok(report) => {
+                    app.import_result = Some(format!(
+                        "✓ Importado: {} adicionados, {} ignorados (duplicatas)",
+                        report.total_added(),
+                        report.total_skipped(),
+                    ));
+                }
+                Err(e) => {
+                    app.import_result = Some(format!("✗ {}", e));
+                }
+            }
+        }
+        KeyCode::Backspace => {
+            match app.import_field {
+                app::ImportField::Path => {
+                    app.import_path.pop();
+                }
+                app::ImportField::Target => {
+                    app.import_target.pop();
+                }
+                app::ImportField::Engagement => {
+                    app.import_engagement.pop();
+                }
+            }
+            app.import_result = None;
+        }
+        KeyCode::Char(c) => {
+            match app.import_field {
+                app::ImportField::Path => app.import_path.push(c),
+                app::ImportField::Target => app.import_target.push(c),
+                app::ImportField::Engagement => app.import_engagement.push(c),
+            }
+            app.import_result = None;
+        }
+        _ => {}
     }
     Ok(())
 }

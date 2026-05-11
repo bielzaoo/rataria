@@ -3,6 +3,7 @@ pub mod create_engagement;
 pub mod dashboard;
 pub mod home;
 pub mod image_preview;
+pub mod import;
 pub mod ips;
 pub mod list_engagements;
 pub mod password;
