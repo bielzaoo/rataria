@@ -387,6 +387,31 @@ fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
         }
         KeyCode::Down | KeyCode::Char('j') => app.dashboard_next(),
         KeyCode::Up | KeyCode::Char('k') => app.dashboard_previous(),
+        KeyCode::Char('e') => {
+            if let Some(eng) = &app.current_engagement {
+                let eng_id = eng.id.clone();
+                let eng_name = eng.name.clone();
+
+                if let Some(db) = &app.db {
+                    match export::export_engagement_markdown(db, &eng_id) {
+                        Ok(content) => {
+                            let path = export::default_report_path(&eng_name);
+                            match export::save_report(&content, &path) {
+                                Ok(_) => {
+                                    app.form_error = Some(format!("✓ Exportado: {}", path));
+                                }
+                                Err(e) => {
+                                    app.form_error = Some(format!("✗ Erro ao salvar: {}", e));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            app.form_error = Some(format!("✗ Erro ao exportar: {}", e));
+                        }
+                    }
+                }
+            }
+        }
         KeyCode::Enter => {
             match app.dashboard_selected {
                 0 => {

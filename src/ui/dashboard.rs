@@ -15,6 +15,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         .constraints([
             Constraint::Length(3), // header
             Constraint::Fill(1),   // conteúdo
+            Constraint::Length(1), // mensagem resultado
             Constraint::Length(1), // dica
         ])
         .split(area);
@@ -89,11 +90,24 @@ pub fn draw(f: &mut Frame, app: &App) {
         .style(Style::default().fg(Color::White));
     f.render_widget(panel, body[1]);
 
+    // Mensagem de resultado
+    if let Some(msg) = &app.form_error {
+        let color = if msg.starts_with('✓') {
+            Color::Green
+        } else {
+            Color::Red
+        };
+        let msg_widget = Paragraph::new(msg.as_str())
+            .style(Style::default().fg(color))
+            .alignment(Alignment::Center);
+        f.render_widget(msg_widget, chunks[2]);
+    }
+
     // Dica
-    let hint = Paragraph::new("↑↓ navegar  •  Enter abrir seção  •  Esc voltar")
+    let hint = Paragraph::new("↑↓ navegar  •  Enter abrir seção  •  E exportar MD  •  Esc voltar")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
-    f.render_widget(hint, chunks[2]);
+    f.render_widget(hint, chunks[3]);
 }
 
 fn format_targets(app: &App) -> String {
