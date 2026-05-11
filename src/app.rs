@@ -16,12 +16,20 @@ pub enum Screen {
     URLs,
     Technologies,
     Screenshots,
+    Import,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormField {
     Name,
     Description,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportField {
+    Path,
+    Target,
+    Engagement,
 }
 
 pub struct App {
@@ -101,6 +109,12 @@ pub struct App {
     pub screenshots: Vec<crate::db::models::Screenshot>,
     pub creating_screenshot: bool,
     pub screenshot_selected: usize,
+
+    pub import_path: String,
+    pub import_target: String,
+    pub import_engagement: String,
+    pub import_result: Option<String>,
+    pub import_field: ImportField,
 }
 
 impl App {
@@ -151,6 +165,11 @@ impl App {
             screenshots: Vec::new(),
             creating_screenshot: false,
             screenshot_selected: 0,
+            import_path: String::new(),
+            import_target: String::new(),
+            import_engagement: String::new(),
+            import_result: None,
+            import_field: ImportField::Path,
         }
     }
 
@@ -438,6 +457,14 @@ impl App {
         } else {
             self.screenshot_selected -= 1;
         }
+    }
+
+    pub fn reset_import_form(&mut self) {
+        self.import_path.clear();
+        self.import_target.clear();
+        self.import_engagement.clear();
+        self.import_result = None;
+        self.import_field = ImportField::Path;
     }
 }
 
@@ -1220,5 +1247,35 @@ mod tests {
     fn test_selected_technology_vazio_retorna_none() {
         let app = App::new();
         assert!(app.selected_technology().is_none());
+    }
+
+    // ── testes de import form ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_import_form_inicia_vazio() {
+        let app = App::new();
+        assert!(app.import_path.is_empty());
+        assert!(app.import_target.is_empty());
+        assert!(app.import_engagement.is_empty());
+        assert!(app.import_result.is_none());
+        assert_eq!(app.import_field, ImportField::Path);
+    }
+
+    #[test]
+    fn test_reset_import_form() {
+        let mut app = App::new();
+        app.import_path = "/tmp/subs.txt".to_string();
+        app.import_target = "empresa.com".to_string();
+        app.import_engagement = "Test".to_string();
+        app.import_result = Some("ok".to_string());
+        app.import_field = ImportField::Target;
+
+        app.reset_import_form();
+
+        assert!(app.import_path.is_empty());
+        assert!(app.import_target.is_empty());
+        assert!(app.import_engagement.is_empty());
+        assert!(app.import_result.is_none());
+        assert_eq!(app.import_field, ImportField::Path);
     }
 }

@@ -45,6 +45,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::URLs => ui::urls::draw(f, app),
                 Screen::Technologies => ui::technologies::draw(f, app),
                 Screen::Screenshots => ui::screenshots::draw(f, app),
+                Screen::Import => ui::list_engagements::draw(f, app), // placeholder
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -191,6 +192,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::URLs => handle_urls(key.code, app)?,
                     Screen::Technologies => handle_technologies(key.code, app)?,
                     Screen::Screenshots => handle_screenshots(key.code, app, &mut *terminal)?,
+                    Screen::Import => {} // placeholder
                 }
             }
         }
