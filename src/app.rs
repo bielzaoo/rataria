@@ -117,6 +117,8 @@ pub struct App {
     pub import_result: Option<String>,
     pub import_field: ImportField,
     pub help_previous_screen: Option<Screen>,
+    pub confirm_delete: bool,
+    pub confirm_delete_label: String,
 }
 
 impl App {
@@ -173,6 +175,8 @@ impl App {
             import_result: None,
             import_field: ImportField::Path,
             help_previous_screen: None,
+            confirm_delete: false,
+            confirm_delete_label: String::new(),
         }
     }
 
@@ -482,6 +486,16 @@ impl App {
         } else {
             self.screen = Screen::Home;
         }
+    }
+
+    pub fn ask_confirm_delete(&mut self, label: &str) {
+        self.confirm_delete = true;
+        self.confirm_delete_label = label.to_string();
+    }
+
+    pub fn cancel_confirm_delete(&mut self) {
+        self.confirm_delete = false;
+        self.confirm_delete_label.clear();
     }
 }
 
@@ -1340,5 +1354,31 @@ mod tests {
             assert_eq!(app.screen, Screen::Help);
             assert_eq!(app.help_previous_screen, Some(screen));
         }
+    }
+
+    // ── testes de confirmação de delete ───────────────────────────────────────
+
+    #[test]
+    fn test_confirm_delete_inicia_false() {
+        let app = App::new();
+        assert!(!app.confirm_delete);
+        assert!(app.confirm_delete_label.is_empty());
+    }
+
+    #[test]
+    fn test_ask_confirm_delete() {
+        let mut app = App::new();
+        app.ask_confirm_delete("api.empresa.com");
+        assert!(app.confirm_delete);
+        assert_eq!(app.confirm_delete_label, "api.empresa.com");
+    }
+
+    #[test]
+    fn test_cancel_confirm_delete() {
+        let mut app = App::new();
+        app.ask_confirm_delete("api.empresa.com");
+        app.cancel_confirm_delete();
+        assert!(!app.confirm_delete);
+        assert!(app.confirm_delete_label.is_empty());
     }
 }
