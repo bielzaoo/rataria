@@ -17,6 +17,7 @@ pub enum Screen {
     Technologies,
     Screenshots,
     Import,
+    Help,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,6 +116,7 @@ pub struct App {
     pub import_engagement: String,
     pub import_result: Option<String>,
     pub import_field: ImportField,
+    pub help_previous_screen: Option<Screen>,
 }
 
 impl App {
@@ -170,6 +172,7 @@ impl App {
             import_engagement: String::new(),
             import_result: None,
             import_field: ImportField::Path,
+            help_previous_screen: None,
         }
     }
 
@@ -466,6 +469,19 @@ impl App {
         self.import_engagement.clear();
         self.import_result = None;
         self.import_field = ImportField::Path;
+    }
+
+    pub fn open_help(&mut self) {
+        self.help_previous_screen = Some(self.screen.clone());
+        self.screen = Screen::Help;
+    }
+
+    pub fn close_help(&mut self) {
+        if let Some(prev) = self.help_previous_screen.take() {
+            self.screen = prev;
+        } else {
+            self.screen = Screen::Home;
+        }
     }
 }
 
@@ -1278,5 +1294,51 @@ mod tests {
         assert!(app.import_engagement.is_empty());
         assert!(app.import_result.is_none());
         assert_eq!(app.import_field, ImportField::Path);
+    }
+
+    // ── testes de help screen ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_open_help_salva_tela_anterior() {
+        let mut app = App::new();
+        app.screen = Screen::Dashboard;
+        app.open_help();
+        assert_eq!(app.screen, Screen::Help);
+        assert_eq!(app.help_previous_screen, Some(Screen::Dashboard));
+    }
+
+    #[test]
+    fn test_close_help_retorna_tela_anterior() {
+        let mut app = App::new();
+        app.screen = Screen::Dashboard;
+        app.open_help();
+        app.close_help();
+        assert_eq!(app.screen, Screen::Dashboard);
+        assert!(app.help_previous_screen.is_none());
+    }
+
+    #[test]
+    fn test_close_help_sem_anterior_vai_para_home() {
+        let mut app = App::new();
+        app.screen = Screen::Help;
+        app.close_help();
+        assert_eq!(app.screen, Screen::Home);
+    }
+
+    #[test]
+    fn test_open_help_de_qualquer_tela() {
+        let screens = vec![
+            Screen::Home,
+            Screen::Dashboard,
+            Screen::Targets,
+            Screen::Subdomains,
+        ];
+        for screen in screens {
+            let mut app = App::new();
+            app.screen = screen.clone();
+            app.open_help();
+            assert_eq!(app.screen, Screen::Help);
+            assert_eq!(app.help_previous_screen, Some(screen));
+        }
     }
 }

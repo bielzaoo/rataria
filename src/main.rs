@@ -47,6 +47,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                 Screen::Technologies => ui::technologies::draw(f, app),
                 Screen::Screenshots => ui::screenshots::draw(f, app),
                 Screen::Import => ui::import::draw(f, app),
+                Screen::Help => ui::home::draw(f, app), // placeholder
             })
             .map_err(|e| {
                 error::RatariaError::IoError(std::io::Error::new(
@@ -177,6 +178,14 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     continue;
                 }
 
+                if key.code == KeyCode::Char('?')
+                    && app.screen != Screen::Password
+                    && app.screen != Screen::Help
+                {
+                    app.open_help();
+                    continue;
+                }
+
                 // eventos
                 match app.screen {
                     Screen::Password => handle_password(key.code, app, &db_path)?,
@@ -194,6 +203,13 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     Screen::Technologies => handle_technologies(key.code, app)?,
                     Screen::Screenshots => handle_screenshots(key.code, app, &mut *terminal)?,
                     Screen::Import => handle_import(key.code, app)?,
+                    Screen::Help => {
+                        if let crossterm::event::KeyCode::Char('?')
+                        | crossterm::event::KeyCode::Esc = key.code
+                        {
+                            app.close_help();
+                        }
+                    }
                 }
             }
         }
