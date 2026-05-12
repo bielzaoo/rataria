@@ -28,6 +28,8 @@
 
 ---
 
+![Rataria Screen](./img/screenshot.png) 
+
 ## ✨ Funcionalidades
 
 | Feature | Descrição |
