@@ -29,6 +29,7 @@ impl Database {
     }
 
     /// Abre um banco em memória para testes
+    #[cfg(test)]
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA key = 'test_key';")?;

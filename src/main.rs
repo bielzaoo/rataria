@@ -1,6 +1,4 @@
-use chrono;
 use db::models::SubdomainStatus;
-use uuid;
 mod app;
 mod auth;
 mod db;
@@ -11,10 +9,7 @@ mod ui;
 use app::{App, Screen};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use db::Database;
-use db::{models, queries};
 use error::Result;
-
-use crate::ui::subdomains;
 
 fn main() -> Result<()> {
     let mut terminal = ratatui::init();
@@ -61,121 +56,6 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
         if event::poll(std::time::Duration::from_millis(16))
             .map_err(error::RatariaError::IoError)?
         {
-            fn handle_screenshots(
-                key: KeyCode,
-                app: &mut App,
-                terminal: &mut ratatui::DefaultTerminal,
-            ) -> Result<()> {
-                if app.creating_screenshot {
-                    match key {
-                        KeyCode::Esc => {
-                            app.creating_screenshot = false;
-                            app.reset_form();
-                        }
-                        KeyCode::Enter => {
-                            if app.form_name.trim().is_empty() {
-                                app.form_error = Some("Caminho é obrigatório".to_string());
-                                return Ok(());
-                            }
-                            let sub_id = match &app.current_subdomain {
-                                Some(s) => s.id.clone(),
-                                None => return Ok(()),
-                            };
-                            let new = db::models::NewScreenshot {
-                                subdomain_id: sub_id.clone(),
-                                file_path: app.form_name.trim().to_string(),
-                            };
-                            match db::queries::create_screenshot(app.db.as_ref().unwrap(), new) {
-                                Ok(_) => {
-                                    app.creating_screenshot = false;
-                                    app.reset_form();
-                                    if let Some(db) = &app.db {
-                                        app.screenshots =
-                                            db::queries::list_screenshots_by_subdomain(db, &sub_id)
-                                                .unwrap_or_default();
-                                    }
-                                }
-                                Err(_) => {
-                                    app.form_error = Some("Erro ao salvar screenshot".to_string());
-                                }
-                            }
-                        }
-                        KeyCode::Backspace => {
-                            app.form_name.pop();
-                            app.form_error = None;
-                        }
-                        KeyCode::Char(c) => {
-                            app.form_name.push(c);
-                            app.form_error = None;
-                        }
-                        _ => {}
-                    }
-                } else {
-                    match key {
-                        KeyCode::Esc => {
-                            app.screen = Screen::SubdomainMenu;
-                        }
-                        KeyCode::Down | KeyCode::Char('j') => app.screenshots_next(),
-                        KeyCode::Up | KeyCode::Char('k') => app.screenshots_previous(),
-                        KeyCode::Char('n') => {
-                            app.reset_form();
-                            app.creating_screenshot = true;
-                        }
-                        KeyCode::Enter => {
-                            if let Some(shot) = app.screenshots.get(app.screenshot_selected) {
-                                let path = shot.file_path.clone();
-                                if !ui::image_preview::is_valid_image(&path) {
-                                    app.form_error = Some(
-                                        "Arquivo não encontrado ou formato inválido".to_string(),
-                                    );
-                                } else if ui::image_preview::is_kitty_supported() {
-                                    ui::image_preview::show_kitty_preview(&path).ok();
-                                    terminal.clear().map_err(|e| {
-                                        error::RatariaError::IoError(std::io::Error::new(
-                                            std::io::ErrorKind::Other,
-                                            e.to_string(),
-                                        ))
-                                    })?;
-                                } else {
-                                    app.form_error = Some("Terminal não suporta preview — use O para abrir externamente".to_string());
-                                }
-                            }
-                        }
-                        KeyCode::Char('o') => {
-                            if let Some(shot) = app.screenshots.get(app.screenshot_selected) {
-                                let path = shot.file_path.clone();
-                                if ui::image_preview::is_valid_image(&path) {
-                                    ui::image_preview::open_with_system(&path).ok();
-                                } else {
-                                    app.form_error = Some(
-                                        "Arquivo não encontrado ou formato inválido".to_string(),
-                                    );
-                                }
-                            }
-                        }
-                        KeyCode::Char('d') => {
-                            if let Some(shot) =
-                                app.screenshots.get(app.screenshot_selected).cloned()
-                            {
-                                if let Some(db) = &app.db {
-                                    db::queries::delete_screenshot(db, &shot.id).ok();
-                                    let sub_id = shot.subdomain_id.clone();
-                                    app.screenshots =
-                                        db::queries::list_screenshots_by_subdomain(db, &sub_id)
-                                            .unwrap_or_default();
-                                    if app.screenshot_selected >= app.screenshots.len()
-                                        && !app.screenshots.is_empty()
-                                    {
-                                        app.screenshot_selected = app.screenshots.len() - 1;
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                Ok(())
-            }
             if let Event::Key(key) = event::read().map_err(error::RatariaError::IoError)? {
                 if key.kind != KeyEventKind::Press {
                     continue;

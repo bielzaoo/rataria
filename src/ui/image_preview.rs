@@ -98,6 +98,8 @@ pub fn show_kitty_preview(path: &str) -> std::io::Result<()> {
 /// Detecta o formato da imagem pelo magic bytes
 /// Retorna o código de formato do protocolo Kitty:
 /// 32 = RGBA, 24 = RGB, 100 = PNG
+
+#[allow(dead_code)]
 fn detect_format(data: &[u8]) -> u8 {
     if data.len() >= 8 && &data[0..8] == b"\x89PNG\r\n\x1a\n" {
         return 100; // PNG
@@ -118,6 +120,7 @@ pub fn open_with_system(path: &str) -> std::io::Result<()> {
 }
 
 /// Encoder base64 simples sem dependência externa
+#[allow(dead_code)]
 fn base64_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
@@ -135,7 +138,7 @@ fn base64_encode(data: &[u8]) -> String {
             0
         };
 
-        result.push(CHARS[(b0 >> 2)] as char);
+        result.push(CHARS[b0 >> 2] as char);
         result.push(CHARS[((b0 & 3) << 4) | (b1 >> 4)] as char);
         result.push(if chunk.len() > 1 {
             CHARS[((b1 & 0xf) << 2) | (b2 >> 6)] as char

@@ -98,6 +98,7 @@ pub struct Tag {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct NewTag {
     pub subdomain_id: String,
     pub name: String,
@@ -202,6 +203,7 @@ pub struct Screenshot {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct NewScreenshot {
     pub subdomain_id: String,
     pub file_path: String,

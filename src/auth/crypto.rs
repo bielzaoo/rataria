@@ -6,6 +6,7 @@ use zeroize::Zeroizing;
 
 /// Deriva uma chave a partir da senha usando Argon2id
 /// Retorna a chave como String protegida pelo Zeroizing
+#[allow(dead_code)]
 pub fn derive_key(password: &str) -> Result<Zeroizing<String>> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
@@ -19,6 +20,7 @@ pub fn derive_key(password: &str) -> Result<Zeroizing<String>> {
 }
 
 /// Verifica se a senha bate com o hash armazenado
+#[allow(dead_code)]
 pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
     let parsed = PasswordHash::new(hash).map_err(|e| RatariaError::CryptoError(e.to_string()))?;
 

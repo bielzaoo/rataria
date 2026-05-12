@@ -1,4 +1,4 @@
-use crate::db::{models::*, queries, Database};
+use crate::db::{queries, Database};
 use crate::error::Result;
 use chrono::Utc;
 

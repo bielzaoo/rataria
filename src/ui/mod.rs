@@ -19,7 +19,7 @@ pub mod urls;
 use crate::app::App;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };

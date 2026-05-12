@@ -6,6 +6,7 @@ pub enum RatariaError {
     Database(#[from] rusqlite::Error),
 
     #[error("Senha incorreta ou banco corrompido")]
+    #[allow(dead_code)]
     WrongPassword,
 
     #[error("Não encontrado: {0}")]

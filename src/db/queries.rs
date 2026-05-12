@@ -91,6 +91,7 @@ pub fn get_engagement(db: &Database, id: &str) -> Result<Option<Engagement>> {
     }
 }
 
+#[allow(dead_code)]
 pub fn update_engagement(
     db: &Database,
     id: &str,
@@ -176,6 +177,7 @@ pub fn list_targets(db: &Database, engagement_id: &str) -> Result<Vec<Target>> {
     Ok(targets)
 }
 
+#[allow(dead_code)]
 pub fn get_target(db: &Database, id: &str) -> Result<Option<Target>> {
     let mut stmt = db.conn.prepare(
         "SELECT id, engagement_id, domain, created_at
@@ -359,6 +361,7 @@ pub fn delete_subdomain(db: &Database, id: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn list_subdomains_by_status(
     db: &Database,
     target_id: &str,
@@ -403,6 +406,7 @@ pub fn list_subdomains_by_status(
 
 // ─── Tags ─────────────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 pub fn create_tag(db: &Database, new: NewTag) -> Result<Tag> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().naive_utc();
@@ -421,6 +425,7 @@ pub fn create_tag(db: &Database, new: NewTag) -> Result<Tag> {
     })
 }
 
+#[allow(dead_code)]
 pub fn list_tags(db: &Database, subdomain_id: &str) -> Result<Vec<Tag>> {
     let mut stmt = db.conn.prepare(
         "SELECT id, subdomain_id, name, created_at
@@ -446,6 +451,7 @@ pub fn list_tags(db: &Database, subdomain_id: &str) -> Result<Vec<Tag>> {
     Ok(items)
 }
 
+#[allow(dead_code)]
 pub fn delete_tag(db: &Database, id: &str) -> Result<()> {
     let rows_affected = db
         .conn
@@ -458,6 +464,7 @@ pub fn delete_tag(db: &Database, id: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn delete_tag_by_name(db: &Database, subdomain_id: &str, name: &str) -> Result<()> {
     let rows_affected = db.conn.execute(
         "DELETE FROM tags WHERE subdomain_id = ?1 AND name = ?2",
@@ -589,6 +596,7 @@ pub fn list_urls(db: &Database, subdomain_id: &str) -> Result<Vec<Url>> {
     Ok(items)
 }
 
+#[allow(dead_code)]
 pub fn list_urls_by_type(db: &Database, subdomain_id: &str, url_type: UrlType) -> Result<Vec<Url>> {
     let mut stmt = db.conn.prepare(
         "SELECT id, subdomain_id, url, url_type, created_at
@@ -742,6 +750,7 @@ pub fn delete_asn(db: &Database, id: &str) -> Result<()> {
 
 // ─── Screenshots ──────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 pub fn create_screenshot(db: &Database, new: NewScreenshot) -> Result<Screenshot> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().naive_utc();
@@ -759,6 +768,7 @@ pub fn create_screenshot(db: &Database, new: NewScreenshot) -> Result<Screenshot
     })
 }
 
+#[allow(dead_code)]
 pub fn get_screenshot_by_subdomain(
     db: &Database,
     subdomain_id: &str,

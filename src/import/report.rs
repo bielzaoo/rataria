@@ -13,6 +13,7 @@ pub struct ImportReport {
 }
 
 impl ImportReport {
+    #[allow(dead_code)]
     pub fn merge(&mut self, other: ImportReport) {
         self.subdomains_added += other.subdomains_added;
         self.subdomains_skipped += other.subdomains_skipped;
