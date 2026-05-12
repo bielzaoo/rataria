@@ -30,7 +30,10 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
     let db_path = Database::default_path();
 
     loop {
-        // No loop de draw, troca:
+        // Verifica timeout de sessão
+        if app.screen != Screen::Password && app.db.is_some() && app.is_session_expired() {
+            app.lock_session();
+        }
         // draw
         terminal
             .draw(|f| match app.screen {
@@ -180,6 +183,8 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     continue;
                 }
 
+                app.update_activity(); // ← adiciona aqui
+
                 if key.code == KeyCode::Char('?')
                     && app.screen != Screen::Password
                     && app.screen != Screen::Help
@@ -241,6 +246,7 @@ fn handle_password(key: KeyCode, app: &mut App, db_path: &std::path::PathBuf) ->
                     app.password_input.clear();
                     app.password_error = None;
                     app.screen = Screen::Home;
+                    app.update_activity(); // garante que o timer começa do login
                 }
                 Err(_) => {
                     app.password_error = Some("Senha incorreta".to_string());
