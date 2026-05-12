@@ -1,4 +1,5 @@
 use crate::db::{models::Engagement, Database};
+use std::time::Instant;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {
@@ -119,6 +120,9 @@ pub struct App {
     pub help_previous_screen: Option<Screen>,
     pub confirm_delete: bool,
     pub confirm_delete_label: String,
+
+    pub last_activity: Instant,
+    pub session_timeout_secs: u64,
 }
 
 impl App {
@@ -177,6 +181,8 @@ impl App {
             help_previous_screen: None,
             confirm_delete: false,
             confirm_delete_label: String::new(),
+            last_activity: Instant::now(),
+            session_timeout_secs: 300, // 5 minutos padrão
         }
     }
 
@@ -496,6 +502,25 @@ impl App {
     pub fn cancel_confirm_delete(&mut self) {
         self.confirm_delete = false;
         self.confirm_delete_label.clear();
+    }
+
+    pub fn update_activity(&mut self) {
+        self.last_activity = Instant::now();
+    }
+
+    pub fn is_session_expired(&self) -> bool {
+        self.last_activity.elapsed().as_secs() >= self.session_timeout_secs
+    }
+
+    pub fn lock_session(&mut self) {
+        self.db = None;
+        self.current_engagement = None;
+        self.current_target = None;
+        self.current_subdomain = None;
+        self.password_input.clear();
+        self.password_error = None;
+        self.screen = Screen::Password;
+        self.update_activity();
     }
 }
 
@@ -1380,5 +1405,55 @@ mod tests {
         app.cancel_confirm_delete();
         assert!(!app.confirm_delete);
         assert!(app.confirm_delete_label.is_empty());
+    }
+
+    // ── testes de timeout de sessão ───────────────────────────────────────────
+
+    #[test]
+    fn test_session_timeout_padrao_300s() {
+        let app = App::new();
+        assert_eq!(app.session_timeout_secs, 300);
+    }
+
+    #[test]
+    fn test_session_nao_expirada_inicialmente() {
+        let app = App::new();
+        assert!(!app.is_session_expired());
+    }
+
+    #[test]
+    fn test_update_activity_reseta_timer() {
+        let mut app = App::new();
+        app.update_activity();
+        assert!(!app.is_session_expired());
+    }
+
+    #[test]
+    fn test_session_expira_com_timeout_zero() {
+        let mut app = App::new();
+        app.session_timeout_secs = 0;
+        // Com timeout 0, qualquer elapsed >= 0 expira
+        assert!(app.is_session_expired());
+    }
+
+    #[test]
+    fn test_lock_session_limpa_dados_sensiveis() {
+        let mut app = App::new();
+        app.screen = Screen::Dashboard;
+        app.password_input = "senha123".to_string();
+        app.current_engagement = Some(make_engagement("Test"));
+        app.lock_session();
+        assert_eq!(app.screen, Screen::Password);
+        assert!(app.password_input.is_empty());
+        assert!(app.current_engagement.is_none());
+        assert!(app.db.is_none());
+    }
+
+    #[test]
+    fn test_lock_session_vai_para_tela_senha() {
+        let mut app = App::new();
+        app.screen = Screen::Subdomains;
+        app.lock_session();
+        assert_eq!(app.screen, Screen::Password);
     }
 }
