@@ -82,4 +82,6 @@ pub fn draw(f: &mut Frame, app: &App) {
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
     f.render_widget(hint, chunks[3]);
+
+    crate::ui::draw_confirm_modal(f, app);
 }

@@ -16,6 +16,8 @@ use db::Database;
 use db::{models, queries};
 use error::Result;
 
+use crate::ui::subdomains;
+
 fn main() -> Result<()> {
     let mut terminal = ratatui::init();
     let mut app = App::new();
@@ -352,25 +354,39 @@ fn handle_create_engagement(key: KeyCode, app: &mut App) -> Result<()> {
 }
 
 fn handle_list_engagements(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(eng) = app.selected_engagement().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_engagement(db, &eng.id).ok();
+                        app.engagements = db::queries::list_engagements(db).unwrap_or_default();
+                        if app.engagement_selected >= app.engagements.len()
+                            && !app.engagements.is_empty()
+                        {
+                            app.engagement_selected = app.engagements.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     match key {
         KeyCode::Esc => {
             app.screen = Screen::Home;
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            app.engagements_next();
-        }
-        KeyCode::Up | KeyCode::Char('k') => {
-            app.engagements_previous();
-        }
+        KeyCode::Down | KeyCode::Char('j') => app.engagements_next(),
+        KeyCode::Up | KeyCode::Char('k') => app.engagements_previous(),
         KeyCode::Char('d') => {
-            if let Some(eng) = app.selected_engagement().cloned() {
-                let db = app.db.as_ref().unwrap();
-                db::queries::delete_engagement(db, &eng.id).ok();
-                // Recarrega a lista
-                app.engagements = db::queries::list_engagements(db).unwrap_or_default();
-                if app.engagement_selected >= app.engagements.len() && !app.engagements.is_empty() {
-                    app.engagement_selected = app.engagements.len() - 1;
-                }
+            if let Some(eng) = app.selected_engagement() {
+                app.ask_confirm_delete(&eng.name.clone());
             }
         }
         KeyCode::Enter => {
@@ -378,12 +394,9 @@ fn handle_list_engagements(key: KeyCode, app: &mut App) -> Result<()> {
                 let eng_id = eng.id.clone();
                 app.current_engagement = Some(eng);
                 app.dashboard_selected = 0;
-
-                // Carrega os targets do engagement selecionado
                 if let Some(db) = &app.db {
                     app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
                 }
-
                 app.target_selected = 0;
                 app.screen = Screen::Dashboard;
             }
@@ -475,6 +488,33 @@ fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
 }
 
 fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(target) = app.selected_target().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_target(db, &target.id).ok();
+                        let eng_id = app
+                            .current_engagement
+                            .as_ref()
+                            .map(|e| e.id.clone())
+                            .unwrap_or_default();
+                        app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        if app.target_selected >= app.targets.len() && !app.targets.is_empty() {
+                            app.target_selected = app.targets.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_target {
         match key {
             KeyCode::Esc => {
@@ -549,19 +589,8 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
                 }
             }
             KeyCode::Char('d') => {
-                if let Some(target) = app.selected_target().cloned() {
-                    if let Some(db) = &app.db {
-                        db::queries::delete_target(db, &target.id).ok();
-                        let eng_id = app
-                            .current_engagement
-                            .as_ref()
-                            .map(|e| e.id.clone())
-                            .unwrap_or_default();
-                        app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        if app.target_selected >= app.targets.len() && !app.targets.is_empty() {
-                            app.target_selected = app.targets.len() - 1;
-                        }
-                    }
+                if let Some(target) = app.selected_target() {
+                    app.ask_confirm_delete(&target.domain.clone());
                 }
             }
             _ => {}
@@ -571,6 +600,31 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
 }
 
 fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(sub) = app.selected_subdomain().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_subdomain(db, &sub.id).ok();
+                        app.subdomains =
+                            db::queries::list_subdomains(db, &sub.target_id).unwrap_or_default();
+                        if app.subdomain_selected >= app.subdomains.len()
+                            && !app.subdomains.is_empty()
+                        {
+                            app.subdomain_selected = app.subdomains.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_subdomain {
         match key {
             KeyCode::Esc => {
@@ -713,17 +767,8 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                 app.subdomain_selected = 0;
             }
             KeyCode::Char('d') => {
-                if let Some(sub) = app.selected_subdomain().cloned() {
-                    if let Some(db) = &app.db {
-                        db::queries::delete_subdomain(db, &sub.id).ok();
-                        app.subdomains =
-                            db::queries::list_subdomains(db, &sub.target_id).unwrap_or_default();
-                        if app.subdomain_selected >= app.subdomains.len()
-                            && !app.subdomains.is_empty()
-                        {
-                            app.subdomain_selected = app.subdomains.len() - 1;
-                        }
-                    }
+                if let Some(sub) = app.selected_subdomain() {
+                    app.ask_confirm_delete(&sub.subdomain.clone());
                 }
             }
             _ => {}
@@ -769,6 +814,28 @@ fn handle_target_menu(key: KeyCode, app: &mut App) -> Result<()> {
 }
 
 fn handle_ips(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(ip) = app.selected_ip().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_ip(db, &ip.id).ok();
+                        app.ips = db::queries::list_ips(db, &ip.target_id).unwrap_or_default();
+                        if app.ip_selected >= app.ips.len() && !app.ips.is_empty() {
+                            app.ip_selected = app.ips.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_ip {
         match key {
             KeyCode::Esc => {
@@ -823,14 +890,8 @@ fn handle_ips(key: KeyCode, app: &mut App) -> Result<()> {
                 app.creating_ip = true;
             }
             KeyCode::Char('d') => {
-                if let Some(ip) = app.selected_ip().cloned() {
-                    if let Some(db) = &app.db {
-                        db::queries::delete_ip(db, &ip.id).ok();
-                        app.ips = db::queries::list_ips(db, &ip.target_id).unwrap_or_default();
-                        if app.ip_selected >= app.ips.len() && !app.ips.is_empty() {
-                            app.ip_selected = app.ips.len() - 1;
-                        }
-                    }
+                if let Some(ip) = app.selected_ip() {
+                    app.ask_confirm_delete(&ip.ip.clone());
                 }
             }
             _ => {}
@@ -840,6 +901,28 @@ fn handle_ips(key: KeyCode, app: &mut App) -> Result<()> {
 }
 
 fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(asn) = app.selected_asn().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_asn(db, &asn.id).ok();
+                        app.asns = db::queries::list_asns(db, &asn.target_id).unwrap_or_default();
+                        if app.asn_selected >= app.asns.len() && !app.asns.is_empty() {
+                            app.asn_selected = app.asns.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_asn {
         match key {
             KeyCode::Esc => {
@@ -915,14 +998,8 @@ fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
                 app.creating_asn = true;
             }
             KeyCode::Char('d') => {
-                if let Some(asn) = app.selected_asn().cloned() {
-                    if let Some(db) = &app.db {
-                        db::queries::delete_asn(db, &asn.id).ok();
-                        app.asns = db::queries::list_asns(db, &asn.target_id).unwrap_or_default();
-                        if app.asn_selected >= app.asns.len() && !app.asns.is_empty() {
-                            app.asn_selected = app.asns.len() - 1;
-                        }
-                    }
+                if let Some(asn) = app.selected_asn() {
+                    app.ask_confirm_delete(&asn.asn.clone());
                 }
             }
             _ => {}
@@ -961,6 +1038,29 @@ fn handle_subdomain_menu(key: KeyCode, app: &mut App) -> Result<()> {
 }
 
 fn handle_urls(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(url) = app.selected_url().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_url(db, &url.id).ok();
+                        app.urls =
+                            db::queries::list_urls(db, &url.subdomain_id).unwrap_or_default();
+                        if app.url_selected >= app.urls.len() && !app.urls.is_empty() {
+                            app.url_selected = app.urls.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_url {
         match key {
             KeyCode::Esc => {
@@ -1025,15 +1125,8 @@ fn handle_urls(key: KeyCode, app: &mut App) -> Result<()> {
                 app.creating_url = true;
             }
             KeyCode::Char('d') => {
-                if let Some(url) = app.selected_url().cloned() {
-                    if let Some(db) = &app.db {
-                        db::queries::delete_url(db, &url.id).ok();
-                        app.urls =
-                            db::queries::list_urls(db, &url.subdomain_id).unwrap_or_default();
-                        if app.url_selected >= app.urls.len() && !app.urls.is_empty() {
-                            app.url_selected = app.urls.len() - 1;
-                        }
-                    }
+                if let Some(url) = app.selected_url() {
+                    app.ask_confirm_delete(&url.url.clone());
                 }
             }
             _ => {}
@@ -1043,6 +1136,31 @@ fn handle_urls(key: KeyCode, app: &mut App) -> Result<()> {
 }
 
 fn handle_technologies(key: KeyCode, app: &mut App) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(tech) = app.selected_technology().cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_technology(db, &tech.id).ok();
+                        app.technologies = db::queries::list_technologies(db, &tech.subdomain_id)
+                            .unwrap_or_default();
+                        if app.technology_selected >= app.technologies.len()
+                            && !app.technologies.is_empty()
+                        {
+                            app.technology_selected = app.technologies.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_technology {
         match key {
             KeyCode::Esc => {
@@ -1119,17 +1237,8 @@ fn handle_technologies(key: KeyCode, app: &mut App) -> Result<()> {
                 app.creating_technology = true;
             }
             KeyCode::Char('d') => {
-                if let Some(tech) = app.selected_technology().cloned() {
-                    if let Some(db) = &app.db {
-                        db::queries::delete_technology(db, &tech.id).ok();
-                        app.technologies = db::queries::list_technologies(db, &tech.subdomain_id)
-                            .unwrap_or_default();
-                        if app.technology_selected >= app.technologies.len()
-                            && !app.technologies.is_empty()
-                        {
-                            app.technology_selected = app.technologies.len() - 1;
-                        }
-                    }
+                if let Some(tech) = app.selected_technology() {
+                    app.ask_confirm_delete(&tech.name.clone());
                 }
             }
             _ => {}
@@ -1143,6 +1252,32 @@ fn handle_screenshots(
     app: &mut App,
     terminal: &mut ratatui::DefaultTerminal,
 ) -> Result<()> {
+    if app.confirm_delete {
+        match key {
+            KeyCode::Enter => {
+                if let Some(shot) = app.screenshots.get(app.screenshot_selected).cloned() {
+                    if let Some(db) = &app.db {
+                        db::queries::delete_screenshot(db, &shot.id).ok();
+                        let sub_id = shot.subdomain_id.clone();
+                        app.screenshots = db::queries::list_screenshots_by_subdomain(db, &sub_id)
+                            .unwrap_or_default();
+                        if app.screenshot_selected >= app.screenshots.len()
+                            && !app.screenshots.is_empty()
+                        {
+                            app.screenshot_selected = app.screenshots.len() - 1;
+                        }
+                    }
+                }
+                app.cancel_confirm_delete();
+            }
+            KeyCode::Esc => {
+                app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_screenshot {
         match key {
             KeyCode::Esc => {
@@ -1231,18 +1366,8 @@ fn handle_screenshots(
                 }
             }
             KeyCode::Char('d') => {
-                if let Some(shot) = app.screenshots.get(app.screenshot_selected).cloned() {
-                    if let Some(db) = &app.db {
-                        db::queries::delete_screenshot(db, &shot.id).ok();
-                        let sub_id = shot.subdomain_id.clone();
-                        app.screenshots = db::queries::list_screenshots_by_subdomain(db, &sub_id)
-                            .unwrap_or_default();
-                        if app.screenshot_selected >= app.screenshots.len()
-                            && !app.screenshots.is_empty()
-                        {
-                            app.screenshot_selected = app.screenshots.len() - 1;
-                        }
-                    }
+                if let Some(shot) = app.screenshots.get(app.screenshot_selected) {
+                    app.ask_confirm_delete(&shot.file_path.clone());
                 }
             }
             _ => {}
