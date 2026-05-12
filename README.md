@@ -1,5 +1,7 @@
 # Rataria 🐀
 
+![Rataria Screen](./img/screenshot.png) 
+
 Um TUI para gerenciamento de alvos em Pentest, Red Team e Bug Bounty.  
 Organiza todas as informações coletadas durante o recon de um ou mais alvos — subdomains, IPs, ASNs, URLs, tecnologias e screenshots — em um banco local criptografado.
 
