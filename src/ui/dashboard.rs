@@ -77,7 +77,13 @@ pub fn draw(f: &mut Frame, app: &App) {
     let section = App::dashboard_menu_items()[app.dashboard_selected];
     let content = match section {
         "Targets" => format_targets(app),
-        _ => format!("  {} — em breve", section),
+        "Subdomains" => format_subdomains(app),
+        "IPs" => format_ips(app),
+        "ASNs" => format_asns(app),
+        "URLs" => format_urls(app),
+        "Technologies" => format_technologies(app),
+        "Screenshots" => format_screenshots(app),
+        _ => String::new(),
     };
 
     let panel = Paragraph::new(content)
@@ -117,6 +123,88 @@ fn format_targets(app: &App) -> String {
     app.targets
         .iter()
         .map(|t| format!("  • {}", t.domain))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_subdomains(app: &App) -> String {
+    if app.subdomains.is_empty() {
+        return "  Nenhum subdomain cadastrado.".to_string();
+    }
+    app.subdomains
+        .iter()
+        .map(|s| {
+            let code = s
+                .status_code
+                .map(|c| format!(" [{}]", c))
+                .unwrap_or_default();
+            format!("  • {}{} — {}", s.subdomain, code, s.status.as_str())
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_ips(app: &App) -> String {
+    if app.ips.is_empty() {
+        return "  Nenhum IP cadastrado.".to_string();
+    }
+    app.ips
+        .iter()
+        .map(|i| format!("  • {}", i.ip))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_asns(app: &App) -> String {
+    if app.asns.is_empty() {
+        return "  Nenhum ASN cadastrado.".to_string();
+    }
+    app.asns
+        .iter()
+        .map(|a| match &a.org {
+            Some(org) => format!("  • {} — {}", a.asn, org),
+            None => format!("  • {}", a.asn),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_urls(app: &App) -> String {
+    if app.urls.is_empty() {
+        return "  Nenhum URL cadastrado.".to_string();
+    }
+    app.urls
+        .iter()
+        .map(|u| format!("  • [{}] {}", u.url_type.as_str(), u.url))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_technologies(app: &App) -> String {
+    if app.technologies.is_empty() {
+        return "  Nenhuma tecnologia cadastrada.".to_string();
+    }
+    app.technologies
+        .iter()
+        .map(|t| match &t.version {
+            Some(v) => format!("  • {} v{}", t.name, v),
+            None => format!("  • {}", t.name),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_screenshots(app: &App) -> String {
+    if app.screenshots.is_empty() {
+        return "  Nenhuma screenshot cadastrada.".to_string();
+    }
+    app.screenshots
+        .iter()
+        .map(|s| {
+            let exists = std::path::Path::new(&s.file_path).exists();
+            let icon = if exists { "✓" } else { "✗" };
+            format!("  {} {}", icon, s.file_path)
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

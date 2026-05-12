@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
 use chrono;
 use db::models::SubdomainStatus;
 use uuid;
@@ -400,9 +398,29 @@ fn handle_list_engagements(key: KeyCode, app: &mut App) -> Result<()> {
                 let eng_id = eng.id.clone();
                 app.current_engagement = Some(eng);
                 app.dashboard_selected = 0;
+
                 if let Some(db) = &app.db {
                     app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
+
+                    // Carrega dados do primeiro target para preview no dashboard
+                    if let Some(first_target) = app.targets.first() {
+                        let tid = first_target.id.clone();
+                        app.ips = db::queries::list_ips(db, &tid).unwrap_or_default();
+                        app.asns = db::queries::list_asns(db, &tid).unwrap_or_default();
+                        app.subdomains = db::queries::list_subdomains(db, &tid).unwrap_or_default();
+
+                        // Carrega dados do primeiro subdomain para preview
+                        if let Some(first_sub) = app.subdomains.first() {
+                            let sid = first_sub.id.clone();
+                            app.urls = db::queries::list_urls(db, &sid).unwrap_or_default();
+                            app.technologies =
+                                db::queries::list_technologies(db, &sid).unwrap_or_default();
+                            app.screenshots = db::queries::list_screenshots_by_subdomain(db, &sid)
+                                .unwrap_or_default();
+                        }
+                    }
                 }
+
                 app.target_selected = 0;
                 app.screen = Screen::Dashboard;
             }
@@ -450,6 +468,7 @@ fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
         KeyCode::Enter => {
             match app.dashboard_selected {
                 0 => {
+                    // Targets
                     if let Some(eng) = &app.current_engagement {
                         let eng_id = eng.id.clone();
                         if let Some(db) = &app.db {
@@ -462,28 +481,77 @@ fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
                     app.screen = Screen::Targets;
                 }
                 1 => {
-                    // Subdomains — precisa de um target selecionado
-                    if let Some(target) = app.current_target.clone() {
+                    // Subdomains — vai para targets primeiro para selecionar
+                    if let Some(eng) = &app.current_engagement {
+                        let eng_id = eng.id.clone();
                         if let Some(db) = &app.db {
-                            app.subdomains =
-                                db::queries::list_subdomains(db, &target.id).unwrap_or_default();
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
                         }
-                        app.subdomain_selected = 0;
-                        app.subdomain_filter = None;
-                        app.creating_subdomain = false;
-                        app.screen = Screen::Subdomains;
-                    } else {
-                        // Sem target selecionado, vai para targets primeiro
-                        if let Some(eng) = &app.current_engagement {
-                            let eng_id = eng.id.clone();
-                            if let Some(db) = &app.db {
-                                app.targets =
-                                    db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                            }
-                        }
-                        app.target_selected = 0;
-                        app.screen = Screen::Targets;
                     }
+                    app.target_selected = 0;
+                    app.creating_target = false;
+                    app.screen = Screen::Targets;
+                }
+                2 => {
+                    // IPs — vai para targets para selecionar o target
+                    if let Some(eng) = &app.current_engagement {
+                        let eng_id = eng.id.clone();
+                        if let Some(db) = &app.db {
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        }
+                    }
+                    app.target_selected = 0;
+                    app.screen = Screen::Targets;
+                }
+                3 => {
+                    // ASNs — vai para targets para selecionar o target
+                    if let Some(eng) = &app.current_engagement {
+                        let eng_id = eng.id.clone();
+                        if let Some(db) = &app.db {
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        }
+                    }
+                    app.target_selected = 0;
+                    app.screen = Screen::Targets;
+                }
+                4 => {
+                    // URLs — vai para targets → subdomains
+                    if let Some(eng) = &app.current_engagement {
+                        let eng_id = eng.id.clone();
+                        if let Some(db) = &app.db {
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        }
+                    }
+                    app.target_selected = 0;
+                    app.screen = Screen::Targets;
+                }
+                5 => {
+                    // Technologies — vai para targets → subdomains
+                    if let Some(eng) = &app.current_engagement {
+                        let eng_id = eng.id.clone();
+                        if let Some(db) = &app.db {
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        }
+                    }
+                    app.target_selected = 0;
+                    app.screen = Screen::Targets;
+                }
+                6 => {
+                    // Screenshots — vai para targets → subdomains
+                    if let Some(eng) = &app.current_engagement {
+                        let eng_id = eng.id.clone();
+                        if let Some(db) = &app.db {
+                            app.targets =
+                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
+                        }
+                    }
+                    app.target_selected = 0;
+                    app.screen = Screen::Targets;
                 }
                 _ => {}
             }
