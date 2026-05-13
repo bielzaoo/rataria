@@ -1,0 +1,3 @@
+2026-05-12 22:26:28.627: ERROR CORE sqlcipher_page_cipher: hmac check failed for pgno=1
+2026-05-12 22:26:28.627: ERROR CORE sqlite3Codec: error decrypting page 1 data: 1
+2026-05-12 22:26:28.627: ERROR CORE sqlcipher_codec_ctx_set_error 1

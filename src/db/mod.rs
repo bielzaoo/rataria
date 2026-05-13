@@ -15,6 +15,10 @@ impl Database {
     /// Abre (ou cria) o banco criptografado com a senha fornecida
     pub fn open(db_path: &PathBuf, password: &str) -> Result<Self> {
         let conn = Connection::open(db_path)?;
+
+        // Suprime logs internos do SQLCipher
+        conn.execute_batch("PRAGMA cipher_log = none;")?;
+
         conn.execute_batch(&format!("PRAGMA key = '{}';", password))?;
         conn.execute_batch(
             "
