@@ -17,7 +17,7 @@ impl Database {
         let conn = Connection::open(db_path)?;
 
         // Suprime logs internos do SQLCipher
-        conn.execute_batch("PRAGMA cipher_log = none;")?;
+        conn.execute_batch("PRAGMA cipher_log = '/dev/null';")?;
 
         conn.execute_batch(&format!("PRAGMA key = '{}';", password))?;
         conn.execute_batch(
