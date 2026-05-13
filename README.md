@@ -28,7 +28,7 @@
 
 ---
 
-![Rataria Screen](./img/screenshot.png) 
+![Rataria Screen](./img/preview.png) 
 
 ## ✨ Funcionalidades
 
