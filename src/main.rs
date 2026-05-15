@@ -630,6 +630,100 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
         return Ok(());
     }
 
+    if app.editing_subdomain {
+        match key {
+            KeyCode::Esc => {
+                app.editing_subdomain = false;
+                app.reset_form();
+            }
+            KeyCode::Tab => {
+                app.form_field = match app.form_field {
+                    app::FormField::Name => app::FormField::StatusCode,
+                    app::FormField::StatusCode => app::FormField::Title,
+                    app::FormField::Title => app::FormField::Name,
+                    _ => app::FormField::Name,
+                };
+            }
+            KeyCode::Enter => {
+                let id = match &app.editing_item_id {
+                    Some(id) => id.clone(),
+                    None => return Ok(()),
+                };
+
+                let status_code = if app.form_status_code.trim().is_empty() {
+                    None
+                } else {
+                    match app.form_status_code.trim().parse::<i32>() {
+                        Ok(n) => Some(n),
+                        Err(_) => {
+                            app.form_error = Some("Status code deve ser um número".to_string());
+                            return Ok(());
+                        }
+                    }
+                };
+
+                let update = db::models::UpdateSubdomain {
+                    status: None,
+                    notes: None,
+                    status_code,
+                    title: if app.form_title.trim().is_empty() {
+                        None
+                    } else {
+                        Some(app.form_title.trim().to_string())
+                    },
+                    subdomain: if app.form_name.trim().is_empty() {
+                        None
+                    } else {
+                        Some(app.form_name.trim().to_string())
+                    },
+                };
+
+                match db::queries::update_subdomain(app.db.as_ref().unwrap(), &id, update) {
+                    Ok(_) => {
+                        if let Some(target) = &app.current_target {
+                            let tid = target.id.clone();
+                            if let Some(db) = &app.db {
+                                app.subdomains =
+                                    db::queries::list_subdomains(db, &tid).unwrap_or_default();
+                            }
+                        }
+                        app.editing_subdomain = false;
+                        app.reset_form();
+                    }
+                    Err(e) => {
+                        app.form_error = Some(format!("✗ {}", e));
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                match app.form_field {
+                    app::FormField::Name => {
+                        app.form_name.pop();
+                    }
+                    app::FormField::StatusCode => {
+                        app.form_status_code.pop();
+                    }
+                    app::FormField::Title => {
+                        app.form_title.pop();
+                    }
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                match app.form_field {
+                    app::FormField::Name => app.form_name.push(c),
+                    app::FormField::StatusCode => app.form_status_code.push(c),
+                    app::FormField::Title => app.form_title.push(c),
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_subdomain {
         match key {
             KeyCode::Esc => {
@@ -688,6 +782,7 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                         notes: Some(app.form_notes.clone()),
                         status_code: None,
                         title: None,
+                        subdomain: None,
                     };
                     if let Some(db) = &app.db {
                         db::queries::update_subdomain(db, &sub.id, update).ok();
@@ -752,6 +847,7 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
                         notes: None,
                         status_code: None,
                         title: None,
+                        subdomain: None,
                     };
                     if let Some(db) = &app.db {
                         db::queries::update_subdomain(db, &sub.id, update).ok();
@@ -774,6 +870,18 @@ fn handle_subdomains(key: KeyCode, app: &mut App) -> Result<()> {
             KeyCode::Char('d') => {
                 if let Some(sub) = app.selected_subdomain() {
                     app.ask_confirm_delete(&sub.subdomain.clone());
+                }
+            }
+            KeyCode::Char('e') => {
+                if let Some(sub) = app.selected_subdomain().cloned() {
+                    app.form_name = sub.subdomain.clone();
+                    app.form_status_code =
+                        sub.status_code.map(|c| c.to_string()).unwrap_or_default();
+                    app.form_title = sub.title.clone().unwrap_or_default();
+                    app.form_field = app::FormField::Name;
+                    app.form_error = None;
+                    app.editing_item_id = Some(sub.id.clone());
+                    app.editing_subdomain = true;
                 }
             }
             _ => {}

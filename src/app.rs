@@ -132,6 +132,7 @@ pub struct App {
     pub editing_subdomain: bool,
     pub form_status_code: String,
     pub form_title: String,
+    pub editing_item_id: Option<String>,
 }
 
 impl App {
@@ -197,6 +198,7 @@ impl App {
             editing_subdomain: false,
             form_status_code: String::new(),
             form_title: String::new(),
+            editing_item_id: None,
         }
     }
 
@@ -232,6 +234,7 @@ impl App {
         self.editing_subdomain = false;
         self.form_status_code.clear();
         self.form_title.clear();
+        self.editing_item_id = None;
     }
 
     /// Alterna entre os campos do formulário

@@ -202,6 +202,7 @@ mod tests {
                 notes: Some("SQLi encontrado".to_string()),
                 status_code: None,
                 title: None,
+                subdomain: None,
             },
         )
         .unwrap();

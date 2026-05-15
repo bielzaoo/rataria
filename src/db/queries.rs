@@ -321,7 +321,6 @@ pub fn get_subdomain(db: &Database, id: &str) -> Result<Option<Subdomain>> {
 pub fn update_subdomain(db: &Database, id: &str, update: UpdateSubdomain) -> Result<Subdomain> {
     let now = Utc::now().naive_utc();
 
-    // Busca o estado atual para aplicar apenas os campos fornecidos
     let current = get_subdomain(db, id)?
         .ok_or_else(|| RatariaError::NotFound("Subdomain não encontrado".to_string()))?;
 
@@ -329,11 +328,13 @@ pub fn update_subdomain(db: &Database, id: &str, update: UpdateSubdomain) -> Res
     let new_notes = update.notes.or(current.notes);
     let new_status_code = update.status_code.or(current.status_code);
     let new_title = update.title.or(current.title);
+    let new_subdomain = update.subdomain.unwrap_or(current.subdomain);
 
     db.conn.execute(
-        "UPDATE subdomains SET status = ?1, notes = ?2, status_code = ?3, title = ?4, updated_at = ?5
-         WHERE id = ?6",
+        "UPDATE subdomains SET subdomain = ?1, status = ?2, notes = ?3, status_code = ?4, title = ?5, updated_at = ?6
+         WHERE id = ?7",
         rusqlite::params![
+            new_subdomain,
             new_status.as_str(),
             new_notes,
             new_status_code,
@@ -1567,6 +1568,7 @@ mod tests {
                 notes: Some("Tela de login com SQLi".to_string()),
                 status_code: None,
                 title: None,
+                subdomain: None,
             },
         )
         .unwrap();
@@ -1637,6 +1639,7 @@ mod tests {
                 notes: None,
                 status_code: None,
                 title: None,
+                subdomain: None,
             },
         )
         .unwrap();
@@ -2826,6 +2829,7 @@ mod tests {
                 notes: None,
                 status_code: Some(404),
                 title: Some("Not Found".to_string()),
+                subdomain: None,
             },
         )
         .unwrap();

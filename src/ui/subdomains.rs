@@ -3,9 +3,7 @@ use crate::db::models::SubdomainStatus;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{
-        Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState,
-    },
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
     Frame,
 };
 
@@ -51,6 +49,8 @@ pub fn draw(f: &mut Frame, app: &App) {
         draw_create_form(f, app, chunks[2]);
     } else if app.editing_notes {
         draw_edit_notes(f, app, chunks[2]);
+    } else if app.editing_subdomain {
+        draw_edit_form(f, app, chunks[2]);
     } else {
         draw_table(f, app, chunks[2]);
     }
@@ -60,8 +60,10 @@ pub fn draw(f: &mut Frame, app: &App) {
         "Enter confirmar  •  Esc cancelar"
     } else if app.editing_notes {
         "Enter salvar  •  Esc cancelar"
+    } else if app.editing_subdomain {
+        "Tab alternar campo  •  Enter salvar  •  Esc cancelar"
     } else {
-        "N novo  •  S status  •  O notas  •  D deletar  •  F filtro  •  Esc voltar"
+        "N novo  •  E editar  •  S status  •  O notas  •  D deletar  •  F filtro  •  Esc voltar"
     };
 
     let hint_widget = Paragraph::new(hint)
@@ -221,6 +223,94 @@ fn draw_create_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             .style(Style::default().fg(Color::Red))
             .alignment(Alignment::Center);
         f.render_widget(error_msg, err_center);
+    }
+}
+
+pub fn draw_edit_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    use crate::app::FormField;
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(3), // nome
+            Constraint::Length(1), // espaço
+            Constraint::Length(3), // status code
+            Constraint::Length(1), // espaço
+            Constraint::Length(3), // title
+            Constraint::Length(1), // erro
+            Constraint::Fill(1),
+        ])
+        .split(area);
+
+    let center = |a, w| {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(w),
+                Constraint::Fill(1),
+            ])
+            .split(a)[1]
+    };
+
+    // Campo nome
+    let name_active = app.form_field == FormField::Name;
+    let name_input = Paragraph::new(app.form_name.as_str())
+        .block(
+            Block::default()
+                .title(" Subdomain ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if name_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(name_input, center(chunks[1], 54));
+
+    // Campo status code
+    let code_active = app.form_field == FormField::StatusCode;
+    let code_input = Paragraph::new(app.form_status_code.as_str())
+        .block(
+            Block::default()
+                .title(" Status Code (ex: 200) ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if code_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(code_input, center(chunks[3], 54));
+
+    // Campo title
+    let title_active = app.form_field == FormField::Title;
+    let title_input = Paragraph::new(app.form_title.as_str())
+        .block(
+            Block::default()
+                .title(" Title ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if title_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(title_input, center(chunks[5], 54));
+
+    // Erro
+    if let Some(err) = &app.form_error {
+        let error_msg = Paragraph::new(format!("✗ {}", err))
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Center);
+        f.render_widget(error_msg, center(chunks[6], 54));
     }
 }
 

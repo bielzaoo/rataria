@@ -115,6 +115,7 @@ pub struct UpdateSubdomain {
     pub notes: Option<String>,
     pub status_code: Option<i32>,
     pub title: Option<String>,
+    pub subdomain: Option<String>, // ← adiciona
 }
 
 #[derive(Debug, Clone, PartialEq)]
