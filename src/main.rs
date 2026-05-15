@@ -271,6 +271,7 @@ fn handle_create_engagement(key: KeyCode, app: &mut App) -> Result<()> {
                 app::FormField::Description => {
                     app.form_description.pop();
                 }
+                _ => {}
             }
             app.form_error = None;
         }
@@ -278,6 +279,7 @@ fn handle_create_engagement(key: KeyCode, app: &mut App) -> Result<()> {
             match app.form_field {
                 app::FormField::Name => app.form_name.push(c),
                 app::FormField::Description => app.form_description.push(c),
+                _ => {}
             }
             app.form_error = None;
         }
@@ -976,6 +978,7 @@ fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
                     app::FormField::Description => {
                         app.form_org.pop();
                     }
+                    _ => {}
                 }
                 app.form_error = None;
             }
@@ -983,6 +986,7 @@ fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
                 match app.form_field {
                     app::FormField::Name => app.form_name.push(c),
                     app::FormField::Description => app.form_org.push(c),
+                    _ => {}
                 }
                 app.form_error = None;
             }
@@ -1215,6 +1219,7 @@ fn handle_technologies(key: KeyCode, app: &mut App) -> Result<()> {
                     app::FormField::Description => {
                         app.form_version.pop();
                     }
+                    _ => {}
                 }
                 app.form_error = None;
             }
@@ -1222,6 +1227,7 @@ fn handle_technologies(key: KeyCode, app: &mut App) -> Result<()> {
                 match app.form_field {
                     app::FormField::Name => app.form_name.push(c),
                     app::FormField::Description => app.form_version.push(c),
+                    _ => {}
                 }
                 app.form_error = None;
             }

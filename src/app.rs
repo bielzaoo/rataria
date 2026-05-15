@@ -25,6 +25,8 @@ pub enum Screen {
 pub enum FormField {
     Name,
     Description,
+    StatusCode,
+    Title,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -126,6 +128,10 @@ pub struct App {
 
     pub screenshot_preview_area: Option<(u16, u16, u16, u16)>, // col, row, width, height
     pub screenshot_last_rendered: Option<usize>,
+
+    pub editing_subdomain: bool,
+    pub form_status_code: String,
+    pub form_title: String,
 }
 
 impl App {
@@ -188,6 +194,9 @@ impl App {
             session_timeout_secs: 300, // 5 minutos padrão
             screenshot_preview_area: None,
             screenshot_last_rendered: None,
+            editing_subdomain: false,
+            form_status_code: String::new(),
+            form_title: String::new(),
         }
     }
 
@@ -220,6 +229,9 @@ impl App {
         self.form_description.clear();
         self.form_field = FormField::Name;
         self.form_error = None;
+        self.editing_subdomain = false;
+        self.form_status_code.clear();
+        self.form_title.clear();
     }
 
     /// Alterna entre os campos do formulário
@@ -227,6 +239,8 @@ impl App {
         self.form_field = match self.form_field {
             FormField::Name => FormField::Description,
             FormField::Description => FormField::Name,
+            FormField::StatusCode => FormField::Title,
+            FormField::Title => FormField::StatusCode,
         };
     }
 
@@ -1460,5 +1474,51 @@ mod tests {
         app.screen = Screen::Subdomains;
         app.lock_session();
         assert_eq!(app.screen, Screen::Password);
+    }
+
+    // ── testes de edição de subdomain ─────────────────────────────────────────
+
+    #[test]
+    fn test_editing_subdomain_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_subdomain);
+    }
+
+    #[test]
+    fn test_form_status_code_inicia_vazio() {
+        let app = App::new();
+        assert!(app.form_status_code.is_empty());
+    }
+
+    #[test]
+    fn test_form_title_inicia_vazio() {
+        let app = App::new();
+        assert!(app.form_title.is_empty());
+    }
+
+    #[test]
+    fn test_reset_form_limpa_campos_edicao() {
+        let mut app = App::new();
+        app.editing_subdomain = true;
+        app.form_status_code = "200".to_string();
+        app.form_title = "API".to_string();
+        app.form_field = FormField::StatusCode;
+
+        app.reset_form();
+
+        assert!(!app.editing_subdomain);
+        assert!(app.form_status_code.is_empty());
+        assert!(app.form_title.is_empty());
+        assert_eq!(app.form_field, FormField::Name);
+    }
+
+    #[test]
+    fn test_form_next_field_cicla_todos_campos() {
+        let mut app = App::new();
+        assert_eq!(app.form_field, FormField::Name);
+        app.form_next_field();
+        assert_eq!(app.form_field, FormField::Description);
+        app.form_next_field();
+        assert_eq!(app.form_field, FormField::Name);
     }
 }

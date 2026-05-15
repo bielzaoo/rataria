@@ -136,6 +136,11 @@ mod tests {
     use super::*;
     use crate::db::Database;
 
+    use crate::db::models::{
+        Engagement, NewAsn, NewEngagement, NewIp, NewSubdomain, NewTarget, NewTechnology, NewUrl,
+        SubdomainStatus, UpdateSubdomain, UrlType,
+    };
+
     fn setup() -> Database {
         Database::open_in_memory().unwrap()
     }
