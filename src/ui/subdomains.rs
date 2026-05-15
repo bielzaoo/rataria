@@ -116,6 +116,11 @@ fn draw_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
+        Cell::from("Title").style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Cell::from("Notas").style(
             Style::default()
                 .fg(Color::Yellow)
@@ -134,12 +139,14 @@ fn draw_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 .status_code
                 .map(|c| c.to_string())
                 .unwrap_or_else(|| "-".to_string());
+            let title = s.title.as_deref().unwrap_or("-");
             let notes = s.notes.as_deref().unwrap_or("-");
 
             Row::new(vec![
                 Cell::from(s.subdomain.as_str()),
                 status_cell,
                 Cell::from(code),
+                Cell::from(title),
                 Cell::from(notes),
             ])
         })
@@ -148,9 +155,10 @@ fn draw_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let table = Table::new(
         rows,
         [
-            Constraint::Percentage(40),
-            Constraint::Percentage(15),
-            Constraint::Percentage(8),
+            Constraint::Percentage(30),
+            Constraint::Percentage(13),
+            Constraint::Percentage(7),
+            Constraint::Percentage(20),
             Constraint::Fill(1),
         ],
     )
