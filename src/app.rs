@@ -123,6 +123,9 @@ pub struct App {
 
     pub last_activity: Instant,
     pub session_timeout_secs: u64,
+
+    pub screenshot_preview_area: Option<(u16, u16, u16, u16)>, // col, row, width, height
+    pub screenshot_last_rendered: Option<usize>,
 }
 
 impl App {
@@ -183,6 +186,8 @@ impl App {
             confirm_delete_label: String::new(),
             last_activity: Instant::now(),
             session_timeout_secs: 300, // 5 minutos padrão
+            screenshot_preview_area: None,
+            screenshot_last_rendered: None,
         }
     }
 

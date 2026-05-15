@@ -27,6 +27,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
         if app.screen != Screen::Password && app.db.is_some() && app.is_session_expired() {
             app.lock_session();
         }
+
         // draw
         terminal
             .draw(|f| match app.screen {
@@ -53,6 +54,54 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<()> {
                     e.to_string(),
                 ))
             })?;
+
+        if app.screen == Screen::Screenshots && !app.creating_screenshot {
+            let current = app
+                .screenshots
+                .get(app.screenshot_selected)
+                .map(|s| s.file_path.clone());
+
+            let needs_render =
+                app.screenshot_last_rendered != Some(app.screenshot_selected) && current.is_some();
+
+            if needs_render {
+                if let Ok(size) = terminal.size() {
+                    let col = (size.width as f32 * 0.40) as u16 + 1;
+                    let row = 3u16;
+                    let w = (size.width as f32 * 0.58) as u16;
+                    let h = size.height.saturating_sub(5);
+
+                    if let Some(path) = current {
+                        if ui::image_preview::is_valid_image(&path)
+                            && ui::image_preview::is_kitty_supported()
+                        {
+                            terminal.clear().map_err(|e| {
+                                error::RatariaError::IoError(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    e.to_string(),
+                                ))
+                            })?;
+                            terminal
+                                .draw(|f| ui::screenshots::draw(f, app))
+                                .map_err(|e| {
+                                    error::RatariaError::IoError(std::io::Error::new(
+                                        std::io::ErrorKind::Other,
+                                        e.to_string(),
+                                    ))
+                                })?;
+                            ui::image_preview::show_kitty_inline(&path, col, row, w, h).ok();
+                            app.screenshot_last_rendered = Some(app.screenshot_selected);
+                        }
+                    }
+                }
+            }
+        } else {
+            if app.screenshot_last_rendered.is_some() {
+                ui::image_preview::clear_kitty_inline().ok();
+                app.screenshot_last_rendered = None;
+            }
+        }
+
         if event::poll(std::time::Duration::from_millis(16))
             .map_err(error::RatariaError::IoError)?
         {
@@ -1239,29 +1288,30 @@ fn handle_screenshots(
                 app.reset_form();
             }
             KeyCode::Enter => {
-                if let Some(shot) = app.screenshots.get(app.screenshot_selected) {
-                    let path = shot.file_path.clone();
-                    if !ui::image_preview::is_valid_image(&path) {
-                        app.form_error = Some(format!("Arquivo inválido: {}", path));
-                    } else if ui::image_preview::is_kitty_supported() {
-                        ui::image_preview::show_kitty_preview(&path).ok();
-                        terminal.clear().map_err(|e| {
-                            error::RatariaError::IoError(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                e.to_string(),
-                            ))
-                        })?;
-                    } else {
-                        // Mostra o que foi detectado para debug
-                        let term = std::env::var("TERM").unwrap_or("não definido".to_string());
-                        let kitty_id =
-                            std::env::var("KITTY_WINDOW_ID").unwrap_or("não definido".to_string());
-                        let term_program =
-                            std::env::var("TERM_PROGRAM").unwrap_or("não definido".to_string());
-                        app.form_error = Some(format!(
-                            "TERM={} KITTY_ID={} TERM_PROGRAM={}",
-                            term, kitty_id, term_program
-                        ));
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Caminho é obrigatório".to_string());
+                    return Ok(());
+                }
+                let sub_id = match &app.current_subdomain {
+                    Some(s) => s.id.clone(),
+                    None => return Ok(()),
+                };
+                let new = db::models::NewScreenshot {
+                    subdomain_id: sub_id.clone(),
+                    file_path: app.form_name.trim().to_string(),
+                };
+                match db::queries::create_screenshot(app.db.as_ref().unwrap(), new) {
+                    Ok(_) => {
+                        app.creating_screenshot = false;
+                        app.reset_form();
+                        if let Some(db) = &app.db {
+                            app.screenshots =
+                                db::queries::list_screenshots_by_subdomain(db, &sub_id)
+                                    .unwrap_or_default();
+                        }
+                    }
+                    Err(_) => {
+                        app.form_error = Some("Erro ao salvar screenshot".to_string());
                     }
                 }
             }

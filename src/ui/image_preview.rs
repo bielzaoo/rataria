@@ -155,6 +155,61 @@ fn base64_encode(data: &[u8]) -> String {
     result
 }
 
+/// Renderiza a imagem em uma área específica do terminal usando --place
+/// area: (x, y, width, height) em células de terminal
+pub fn show_kitty_inline(
+    path: &str,
+    col: u16,
+    row: u16,
+    width: u16,
+    height: u16,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    if !is_valid_image(path) {
+        return Ok(());
+    }
+
+    let mut stdout = std::io::stdout();
+
+    // Limpa a área antes de renderizar
+    write!(stdout, "\x1b_Ga=d\x1b\\")?;
+    stdout.flush()?;
+
+    // Renderiza com posicionamento explícito
+    // --place WxH@CxR — largura x altura @ coluna x linha
+    let status = std::process::Command::new("kitten")
+        .args([
+            "icat",
+            "--clear", // ← limpa imagens anteriores
+            "--place",
+            &format!("{}x{}@{}x{}", width, height, col, row),
+            "--scale-up",
+            "--align",
+            "left",
+            "--stdin",
+            "no",
+            path,
+        ])
+        .status();
+
+    stdout.flush()?;
+
+    match status {
+        Ok(s) if s.success() => Ok(()),
+        _ => Ok(()), // falha silenciosa se kitty não disponível
+    }
+}
+
+/// Limpa todas as imagens Kitty da tela
+pub fn clear_kitty_inline() -> std::io::Result<()> {
+    use std::io::Write;
+    let mut stdout = std::io::stdout();
+    // Deleta todas as imagens (sem especificar d= deleta tudo)
+    write!(stdout, "\x1b_Ga=d\x1b\\")?;
+    stdout.flush()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
