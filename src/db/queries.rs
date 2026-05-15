@@ -1,7 +1,8 @@
 use crate::db::models::{
     Asn, Engagement, Ip, NewAsn, NewEngagement, NewIp, NewScreenshot, NewSubdomain, NewTag,
     NewTarget, NewTechnology, NewUrl, Screenshot, Subdomain, SubdomainStatus, Tag, Target,
-    Technology, UpdateSubdomain, Url, UrlType,
+    Technology, UpdateAsn, UpdateIp, UpdateSubdomain, UpdateTarget, UpdateTechnology, UpdateUrl,
+    Url, UrlType,
 };
 
 use crate::db::Database;
@@ -833,6 +834,147 @@ pub fn list_screenshots_by_subdomain(db: &Database, subdomain_id: &str) -> Resul
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(items)
+}
+
+// ─── Updates ──────────────────────────────────────────────────────────────────
+
+pub fn update_target(db: &Database, id: &str, update: UpdateTarget) -> Result<Target> {
+    let rows_affected = db.conn.execute(
+        "UPDATE targets SET domain = ?1 WHERE id = ?2",
+        rusqlite::params![update.domain, id],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("Target não encontrado".to_string()));
+    }
+
+    get_target(db, id)?.ok_or_else(|| RatariaError::NotFound("Target não encontrado".to_string()))
+}
+
+pub fn update_ip(db: &Database, id: &str, update: UpdateIp) -> Result<Ip> {
+    let rows_affected = db.conn.execute(
+        "UPDATE ips SET ip = ?1 WHERE id = ?2",
+        rusqlite::params![update.ip, id],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("IP não encontrado".to_string()));
+    }
+
+    let mut stmt = db
+        .conn
+        .prepare("SELECT id, target_id, ip, created_at FROM ips WHERE id = ?1")?;
+
+    let mut rows = stmt.query_map([id], |row| {
+        let created_str: String = row.get(3)?;
+        Ok(Ip {
+            id: row.get(0)?,
+            target_id: row.get(1)?,
+            ip: row.get(2)?,
+            created_at: chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S%.f")
+                .unwrap_or_default(),
+        })
+    })?;
+
+    rows.next()
+        .ok_or_else(|| RatariaError::NotFound("IP não encontrado".to_string()))?
+        .map_err(RatariaError::Database)
+}
+
+pub fn update_asn(db: &Database, id: &str, update: UpdateAsn) -> Result<Asn> {
+    let rows_affected = db.conn.execute(
+        "UPDATE asns SET asn = ?1, org = ?2 WHERE id = ?3",
+        rusqlite::params![update.asn, update.org, id],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("ASN não encontrado".to_string()));
+    }
+
+    let mut stmt = db
+        .conn
+        .prepare("SELECT id, target_id, asn, org, created_at FROM asns WHERE id = ?1")?;
+
+    let mut rows = stmt.query_map([id], |row| {
+        let created_str: String = row.get(4)?;
+        Ok(Asn {
+            id: row.get(0)?,
+            target_id: row.get(1)?,
+            asn: row.get(2)?,
+            org: row.get(3)?,
+            created_at: chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S%.f")
+                .unwrap_or_default(),
+        })
+    })?;
+
+    rows.next()
+        .ok_or_else(|| RatariaError::NotFound("ASN não encontrado".to_string()))?
+        .map_err(RatariaError::Database)
+}
+
+pub fn update_url(db: &Database, id: &str, update: UpdateUrl) -> Result<Url> {
+    let rows_affected = db.conn.execute(
+        "UPDATE urls SET url = ?1, url_type = ?2 WHERE id = ?3",
+        rusqlite::params![update.url, update.url_type.as_str(), id],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound("URL não encontrada".to_string()));
+    }
+
+    let mut stmt = db
+        .conn
+        .prepare("SELECT id, subdomain_id, url, url_type, created_at FROM urls WHERE id = ?1")?;
+
+    let mut rows = stmt.query_map([id], |row| {
+        let type_str: String = row.get(3)?;
+        let created_str: String = row.get(4)?;
+        Ok(Url {
+            id: row.get(0)?,
+            subdomain_id: row.get(1)?,
+            url: row.get(2)?,
+            url_type: UrlType::from_str(&type_str),
+            created_at: chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S%.f")
+                .unwrap_or_default(),
+        })
+    })?;
+
+    rows.next()
+        .ok_or_else(|| RatariaError::NotFound("URL não encontrada".to_string()))?
+        .map_err(RatariaError::Database)
+}
+
+pub fn update_technology(db: &Database, id: &str, update: UpdateTechnology) -> Result<Technology> {
+    let rows_affected = db.conn.execute(
+        "UPDATE technologies SET name = ?1, version = ?2 WHERE id = ?3",
+        rusqlite::params![update.name, update.version, id],
+    )?;
+
+    if rows_affected == 0 {
+        return Err(RatariaError::NotFound(
+            "Technology não encontrada".to_string(),
+        ));
+    }
+
+    let mut stmt = db.conn.prepare(
+        "SELECT id, subdomain_id, name, version, created_at FROM technologies WHERE id = ?1",
+    )?;
+
+    let mut rows = stmt.query_map([id], |row| {
+        let created_str: String = row.get(4)?;
+        Ok(Technology {
+            id: row.get(0)?,
+            subdomain_id: row.get(1)?,
+            name: row.get(2)?,
+            version: row.get(3)?,
+            created_at: chrono::NaiveDateTime::parse_from_str(&created_str, "%Y-%m-%d %H:%M:%S%.f")
+                .unwrap_or_default(),
+        })
+    })?;
+
+    rows.next()
+        .ok_or_else(|| RatariaError::NotFound("Technology não encontrada".to_string()))?
+        .map_err(RatariaError::Database)
 }
 
 #[cfg(test)]
@@ -2423,5 +2565,272 @@ mod tests {
 
         let resultado = get_screenshot_by_subdomain(&db, &sub.id).unwrap();
         assert!(resultado.is_none());
+    }
+
+    // ─── Testes de update ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_update_target() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_target(
+            &db,
+            NewTarget {
+                engagement_id: eng.id.clone(),
+                domain: "empresa.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        let updated = update_target(
+            &db,
+            &target.id,
+            UpdateTarget {
+                domain: "novo-dominio.com".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(updated.domain, "novo-dominio.com");
+        assert_eq!(updated.id, target.id);
+    }
+
+    #[test]
+    fn test_update_target_inexistente_falha() {
+        let db = setup();
+        let result = update_target(
+            &db,
+            "id-inexistente",
+            UpdateTarget {
+                domain: "x.com".to_string(),
+            },
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_ip() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let ip = create_ip(
+            &db,
+            NewIp {
+                target_id: target.id.clone(),
+                ip: "1.1.1.1".to_string(),
+            },
+        )
+        .unwrap();
+
+        let updated = update_ip(
+            &db,
+            &ip.id,
+            UpdateIp {
+                ip: "8.8.8.8".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(updated.ip, "8.8.8.8");
+        assert_eq!(updated.id, ip.id);
+    }
+
+    #[test]
+    fn test_update_ip_inexistente_falha() {
+        let db = setup();
+        let result = update_ip(
+            &db,
+            "id-inexistente",
+            UpdateIp {
+                ip: "1.1.1.1".to_string(),
+            },
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_asn() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let asn = create_asn(
+            &db,
+            NewAsn {
+                target_id: target.id.clone(),
+                asn: "AS111".to_string(),
+                org: None,
+            },
+        )
+        .unwrap();
+
+        let updated = update_asn(
+            &db,
+            &asn.id,
+            UpdateAsn {
+                asn: "AS999".to_string(),
+                org: Some("Nova Org".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(updated.asn, "AS999");
+        assert_eq!(updated.org, Some("Nova Org".to_string()));
+        assert_eq!(updated.id, asn.id);
+    }
+
+    #[test]
+    fn test_update_asn_inexistente_falha() {
+        let db = setup();
+        let result = update_asn(
+            &db,
+            "id-inexistente",
+            UpdateAsn {
+                asn: "AS1".to_string(),
+                org: None,
+            },
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_url() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+        let url = create_url(
+            &db,
+            NewUrl {
+                subdomain_id: sub.id.clone(),
+                url: "https://api.empresa.com/v1".to_string(),
+                url_type: UrlType::Endpoint,
+            },
+        )
+        .unwrap();
+
+        let updated = update_url(
+            &db,
+            &url.id,
+            UpdateUrl {
+                url: "https://api.empresa.com/v2".to_string(),
+                url_type: UrlType::Parameter,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(updated.url, "https://api.empresa.com/v2");
+        assert_eq!(updated.url_type, UrlType::Parameter);
+        assert_eq!(updated.id, url.id);
+    }
+
+    #[test]
+    fn test_update_url_inexistente_falha() {
+        let db = setup();
+        let result = update_url(
+            &db,
+            "id-inexistente",
+            UpdateUrl {
+                url: "https://x.com".to_string(),
+                url_type: UrlType::Other,
+            },
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_technology() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+        let tech = create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "Nginx".to_string(),
+                version: Some("1.24".to_string()),
+            },
+        )
+        .unwrap();
+
+        let updated = update_technology(
+            &db,
+            &tech.id,
+            UpdateTechnology {
+                name: "Apache".to_string(),
+                version: Some("2.4".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(updated.name, "Apache");
+        assert_eq!(updated.version, Some("2.4".to_string()));
+        assert_eq!(updated.id, tech.id);
+    }
+
+    #[test]
+    fn test_update_technology_remove_versao() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+        let tech = create_technology(
+            &db,
+            NewTechnology {
+                subdomain_id: sub.id.clone(),
+                name: "Nginx".to_string(),
+                version: Some("1.24".to_string()),
+            },
+        )
+        .unwrap();
+
+        let updated = update_technology(
+            &db,
+            &tech.id,
+            UpdateTechnology {
+                name: "Nginx".to_string(),
+                version: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(updated.version, None);
+    }
+
+    #[test]
+    fn test_update_technology_inexistente_falha() {
+        let db = setup();
+        let result = update_technology(
+            &db,
+            "id-inexistente",
+            UpdateTechnology {
+                name: "X".to_string(),
+                version: None,
+            },
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_subdomain_status_code_e_title() {
+        let db = setup();
+        let eng = create_test_engagement(&db);
+        let target = create_test_target(&db, &eng.id);
+        let sub = create_test_subdomain(&db, &target.id, "api.empresa.com");
+
+        let updated = update_subdomain(
+            &db,
+            &sub.id,
+            UpdateSubdomain {
+                status: None,
+                notes: None,
+                status_code: Some(404),
+                title: Some("Not Found".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(updated.status_code, Some(404));
+        assert_eq!(updated.title, Some("Not Found".to_string()));
     }
 }

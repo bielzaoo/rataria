@@ -10,6 +10,34 @@ pub struct Engagement {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateTarget {
+    pub domain: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateIp {
+    pub ip: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateAsn {
+    pub asn: String,
+    pub org: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateUrl {
+    pub url: String,
+    pub url_type: UrlType,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateTechnology {
+    pub name: String,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct NewEngagement {
     pub name: String,
     pub description: Option<String>,
