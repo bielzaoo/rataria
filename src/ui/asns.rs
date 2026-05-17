@@ -36,15 +36,20 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     if app.creating_asn {
         draw_asn_form(f, app, chunks[2]);
+    } else if app.editing_asn {
+        draw_edit_form(f, app, chunks[2]);
     } else {
         draw_list(f, app, chunks[2]);
     }
 
     let hint = if app.creating_asn {
         "Tab alternar campo  •  Enter confirmar  •  Esc cancelar"
+    } else if app.editing_asn {
+        "Tab alternar campo  •  Enter salvar  •  Esc cancelar"
     } else {
-        "N novo  •  D deletar  •  Esc voltar"
+        "N novo  •  E editar  •  D deletar  •  Esc voltar"
     };
+
     let hint_widget = Paragraph::new(hint)
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
@@ -145,6 +150,72 @@ fn draw_asn_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
     // Campo Org (ativo quando form_field == Description)
     let org_active = app.form_field == crate::app::FormField::Description;
+    let org_input = Paragraph::new(app.form_org.as_str())
+        .block(
+            Block::default()
+                .title(" Organização (opcional) ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if org_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(org_input, center(chunks[3], 44));
+
+    if let Some(err) = &app.form_error {
+        let error_msg = Paragraph::new(format!("✗ {}", err))
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Center);
+        f.render_widget(error_msg, center(chunks[4], 44));
+    }
+}
+
+fn draw_edit_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    use crate::app::FormField;
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ])
+        .split(area);
+
+    let center = |a, w| {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(w),
+                Constraint::Fill(1),
+            ])
+            .split(a)[1]
+    };
+
+    let asn_active = app.form_field == FormField::Name;
+    let asn_input = Paragraph::new(app.form_name.as_str())
+        .block(
+            Block::default()
+                .title(" ASN (ex: AS12345) ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if asn_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(asn_input, center(chunks[1], 44));
+
+    let org_active = app.form_field == FormField::Description;
     let org_input = Paragraph::new(app.form_org.as_str())
         .block(
             Block::default()

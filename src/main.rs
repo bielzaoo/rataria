@@ -1094,6 +1094,78 @@ fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
         return Ok(());
     }
 
+    if app.editing_asn {
+        match key {
+            KeyCode::Esc => {
+                app.editing_asn = false;
+                app.reset_form();
+                app.form_org.clear();
+            }
+            KeyCode::Tab => {
+                app.form_next_field();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("ASN é obrigatório".to_string());
+                    return Ok(());
+                }
+                let id = match &app.editing_item_id {
+                    Some(id) => id.clone(),
+                    None => return Ok(()),
+                };
+                match db::queries::update_asn(
+                    app.db.as_ref().unwrap(),
+                    &id,
+                    db::models::UpdateAsn {
+                        asn: app.form_name.trim().to_string(),
+                        org: if app.form_org.trim().is_empty() {
+                            None
+                        } else {
+                            Some(app.form_org.trim().to_string())
+                        },
+                    },
+                ) {
+                    Ok(_) => {
+                        if let Some(target) = &app.current_target {
+                            let tid = target.id.clone();
+                            if let Some(db) = &app.db {
+                                app.asns = db::queries::list_asns(db, &tid).unwrap_or_default();
+                            }
+                        }
+                        app.editing_asn = false;
+                        app.reset_form();
+                        app.form_org.clear();
+                    }
+                    Err(e) => {
+                        app.form_error = Some(format!("✗ {}", e));
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                match app.form_field {
+                    app::FormField::Name => {
+                        app.form_name.pop();
+                    }
+                    app::FormField::Description => {
+                        app.form_org.pop();
+                    }
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                match app.form_field {
+                    app::FormField::Name => app.form_name.push(c),
+                    app::FormField::Description => app.form_org.push(c),
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_asn {
         match key {
             KeyCode::Esc => {
@@ -1175,6 +1247,16 @@ fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
                     app.ask_confirm_delete(&asn.asn.clone());
                 }
             }
+            KeyCode::Char('e') => {
+                if let Some(asn) = app.selected_asn().cloned() {
+                    app.form_name = asn.asn.clone();
+                    app.form_org = asn.org.clone().unwrap_or_default();
+                    app.form_field = app::FormField::Name;
+                    app.form_error = None;
+                    app.editing_item_id = Some(asn.id.clone());
+                    app.editing_asn = true;
+                }
+            }
             _ => {}
         }
     }
@@ -1228,6 +1310,65 @@ fn handle_urls(key: KeyCode, app: &mut App) -> Result<()> {
             }
             KeyCode::Esc => {
                 app.cancel_confirm_delete();
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
+    if app.editing_url {
+        match key {
+            KeyCode::Esc => {
+                app.editing_url = false;
+                app.reset_form();
+            }
+            KeyCode::Tab => {
+                app.form_url_type = match app.form_url_type {
+                    db::models::UrlType::Parameter => db::models::UrlType::JavaScript,
+                    db::models::UrlType::JavaScript => db::models::UrlType::Endpoint,
+                    db::models::UrlType::Endpoint => db::models::UrlType::Other,
+                    db::models::UrlType::Other => db::models::UrlType::Parameter,
+                };
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("URL é obrigatória".to_string());
+                    return Ok(());
+                }
+                let id = match &app.editing_item_id {
+                    Some(id) => id.clone(),
+                    None => return Ok(()),
+                };
+                match db::queries::update_url(
+                    app.db.as_ref().unwrap(),
+                    &id,
+                    db::models::UpdateUrl {
+                        url: app.form_name.trim().to_string(),
+                        url_type: app.form_url_type.clone(),
+                    },
+                ) {
+                    Ok(_) => {
+                        if let Some(sub) = &app.current_subdomain {
+                            let sid = sub.id.clone();
+                            if let Some(db) = &app.db {
+                                app.urls = db::queries::list_urls(db, &sid).unwrap_or_default();
+                            }
+                        }
+                        app.editing_url = false;
+                        app.reset_form();
+                    }
+                    Err(e) => {
+                        app.form_error = Some(format!("✗ {}", e));
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
             }
             _ => {}
         }
@@ -1300,6 +1441,15 @@ fn handle_urls(key: KeyCode, app: &mut App) -> Result<()> {
             KeyCode::Char('d') => {
                 if let Some(url) = app.selected_url() {
                     app.ask_confirm_delete(&url.url.clone());
+                }
+            }
+            KeyCode::Char('e') => {
+                if let Some(url) = app.selected_url().cloned() {
+                    app.form_name = url.url.clone();
+                    app.form_url_type = url.url_type.clone();
+                    app.form_error = None;
+                    app.editing_item_id = Some(url.id.clone());
+                    app.editing_url = true;
                 }
             }
             _ => {}
