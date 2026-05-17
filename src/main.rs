@@ -949,6 +949,56 @@ fn handle_ips(key: KeyCode, app: &mut App) -> Result<()> {
         return Ok(());
     }
 
+    if app.editing_ip {
+        match key {
+            KeyCode::Esc => {
+                app.editing_ip = false;
+                app.reset_form();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("IP é obrigatório".to_string());
+                    return Ok(());
+                }
+                let id = match &app.editing_item_id {
+                    Some(id) => id.clone(),
+                    None => return Ok(()),
+                };
+                match db::queries::update_ip(
+                    app.db.as_ref().unwrap(),
+                    &id,
+                    db::models::UpdateIp {
+                        ip: app.form_name.trim().to_string(),
+                    },
+                ) {
+                    Ok(_) => {
+                        if let Some(target) = &app.current_target {
+                            let tid = target.id.clone();
+                            if let Some(db) = &app.db {
+                                app.ips = db::queries::list_ips(db, &tid).unwrap_or_default();
+                            }
+                        }
+                        app.editing_ip = false;
+                        app.reset_form();
+                    }
+                    Err(e) => {
+                        app.form_error = Some(format!("✗ {}", e));
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_ip {
         match key {
             KeyCode::Esc => {
@@ -1005,6 +1055,14 @@ fn handle_ips(key: KeyCode, app: &mut App) -> Result<()> {
             KeyCode::Char('d') => {
                 if let Some(ip) = app.selected_ip() {
                     app.ask_confirm_delete(&ip.ip.clone());
+                }
+            }
+            KeyCode::Char('e') => {
+                if let Some(ip) = app.selected_ip().cloned() {
+                    app.form_name = ip.ip.clone();
+                    app.form_error = None;
+                    app.editing_item_id = Some(ip.id.clone());
+                    app.editing_ip = true;
                 }
             }
             _ => {}
@@ -1276,6 +1334,79 @@ fn handle_technologies(key: KeyCode, app: &mut App) -> Result<()> {
         return Ok(());
     }
 
+    if app.editing_technology {
+        match key {
+            KeyCode::Esc => {
+                app.editing_technology = false;
+                app.reset_form();
+                app.form_version.clear();
+            }
+            KeyCode::Tab => {
+                app.form_next_field();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Nome é obrigatório".to_string());
+                    return Ok(());
+                }
+                let id = match &app.editing_item_id {
+                    Some(id) => id.clone(),
+                    None => return Ok(()),
+                };
+                match db::queries::update_technology(
+                    app.db.as_ref().unwrap(),
+                    &id,
+                    db::models::UpdateTechnology {
+                        name: app.form_name.trim().to_string(),
+                        version: if app.form_version.trim().is_empty() {
+                            None
+                        } else {
+                            Some(app.form_version.trim().to_string())
+                        },
+                    },
+                ) {
+                    Ok(_) => {
+                        if let Some(sub) = &app.current_subdomain {
+                            let sid = sub.id.clone();
+                            if let Some(db) = &app.db {
+                                app.technologies =
+                                    db::queries::list_technologies(db, &sid).unwrap_or_default();
+                            }
+                        }
+                        app.editing_technology = false;
+                        app.reset_form();
+                        app.form_version.clear();
+                    }
+                    Err(e) => {
+                        app.form_error = Some(format!("✗ {}", e));
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                match app.form_field {
+                    app::FormField::Name => {
+                        app.form_name.pop();
+                    }
+                    app::FormField::Description => {
+                        app.form_version.pop();
+                    }
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                match app.form_field {
+                    app::FormField::Name => app.form_name.push(c),
+                    app::FormField::Description => app.form_version.push(c),
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_technology {
         match key {
             KeyCode::Esc => {
@@ -1356,6 +1487,16 @@ fn handle_technologies(key: KeyCode, app: &mut App) -> Result<()> {
             KeyCode::Char('d') => {
                 if let Some(tech) = app.selected_technology() {
                     app.ask_confirm_delete(&tech.name.clone());
+                }
+            }
+            KeyCode::Char('e') => {
+                if let Some(tech) = app.selected_technology().cloned() {
+                    app.form_name = tech.name.clone();
+                    app.form_version = tech.version.clone().unwrap_or_default();
+                    app.form_field = app::FormField::Name;
+                    app.form_error = None;
+                    app.editing_item_id = Some(tech.id.clone());
+                    app.editing_technology = true;
                 }
             }
             _ => {}

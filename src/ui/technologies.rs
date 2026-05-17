@@ -36,15 +36,20 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     if app.creating_technology {
         draw_form(f, app, chunks[2]);
+    } else if app.editing_technology {
+        draw_edit_form(f, app, chunks[2]);
     } else {
         draw_list(f, app, chunks[2]);
     }
 
     let hint = if app.creating_technology {
         "Tab alternar campo  •  Enter confirmar  •  Esc cancelar"
+    } else if app.editing_technology {
+        "Tab alternar campo  •  Enter salvar  •  Esc cancelar"
     } else {
-        "N novo  •  D deletar  •  Esc voltar"
+        "N novo  •  E editar  •  D deletar  •  Esc voltar"
     };
+
     let hint_widget = Paragraph::new(hint)
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
@@ -143,6 +148,72 @@ fn draw_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(name_input, center(chunks[1], 44));
 
     let ver_active = app.form_field == crate::app::FormField::Description;
+    let ver_input = Paragraph::new(app.form_version.as_str())
+        .block(
+            Block::default()
+                .title(" Versão (opcional) ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if ver_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(ver_input, center(chunks[3], 44));
+
+    if let Some(err) = &app.form_error {
+        let error_msg = Paragraph::new(format!("✗ {}", err))
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Center);
+        f.render_widget(error_msg, center(chunks[4], 44));
+    }
+}
+
+fn draw_edit_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    use crate::app::FormField;
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ])
+        .split(area);
+
+    let center = |a, w| {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(w),
+                Constraint::Fill(1),
+            ])
+            .split(a)[1]
+    };
+
+    let name_active = app.form_field == FormField::Name;
+    let name_input = Paragraph::new(app.form_name.as_str())
+        .block(
+            Block::default()
+                .title(" Nome da tecnologia ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if name_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(name_input, center(chunks[1], 44));
+
+    let ver_active = app.form_field == FormField::Description;
     let ver_input = Paragraph::new(app.form_version.as_str())
         .block(
             Block::default()

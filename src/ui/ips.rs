@@ -36,15 +36,20 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     if app.creating_ip {
         draw_form(f, app, chunks[2], " IP (ex: 192.168.1.1) ");
+    } else if app.editing_ip {
+        draw_edit_form(f, app, chunks[2]);
     } else {
         draw_list(f, app, chunks[2]);
     }
 
     let hint = if app.creating_ip {
         "Enter confirmar  •  Esc cancelar"
+    } else if app.editing_ip {
+        "Enter salvar  •  Esc cancelar"
     } else {
-        "N novo  •  D deletar  •  Esc voltar"
+        "N novo  •  E editar  •  D deletar  •  Esc voltar"
     };
+
     let hint_widget = Paragraph::new(hint)
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
@@ -120,6 +125,53 @@ fn draw_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect, field_title:
         .block(
             Block::default()
                 .title(field_title)
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(input, center);
+
+    if let Some(err) = &app.form_error {
+        let err_center = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(44),
+                Constraint::Fill(1),
+            ])
+            .split(chunks[2])[1];
+        let error_msg = Paragraph::new(format!("✗ {}", err))
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Center);
+        f.render_widget(error_msg, err_center);
+    }
+}
+
+fn draw_edit_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ])
+        .split(area);
+
+    let center = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(44),
+            Constraint::Fill(1),
+        ])
+        .split(chunks[1])[1];
+
+    let input = Paragraph::new(app.form_name.as_str())
+        .block(
+            Block::default()
+                .title(" Editar IP ")
                 .title_alignment(Alignment::Center)
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Yellow)),
