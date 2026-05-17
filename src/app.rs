@@ -133,6 +133,10 @@ pub struct App {
     pub form_status_code: String,
     pub form_title: String,
     pub editing_item_id: Option<String>,
+    pub editing_technology: bool,
+    pub editing_ip: bool,
+    pub editing_asn: bool,
+    pub editing_url: bool,
 }
 
 impl App {
@@ -199,6 +203,10 @@ impl App {
             form_status_code: String::new(),
             form_title: String::new(),
             editing_item_id: None,
+            editing_technology: false,
+            editing_ip: false,
+            editing_asn: false,
+            editing_url: false,
         }
     }
 
@@ -235,6 +243,10 @@ impl App {
         self.form_status_code.clear();
         self.form_title.clear();
         self.editing_item_id = None;
+        self.editing_technology = false;
+        self.editing_ip = false;
+        self.editing_asn = false;
+        self.editing_url = false;
     }
 
     /// Alterna entre os campos do formulário
@@ -1523,5 +1535,47 @@ mod tests {
         assert_eq!(app.form_field, FormField::Description);
         app.form_next_field();
         assert_eq!(app.form_field, FormField::Name);
+    }
+
+    #[test]
+    fn test_editing_technology_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_technology);
+    }
+
+    #[test]
+    fn test_editing_ip_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_ip);
+    }
+
+    #[test]
+    fn test_editing_asn_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_asn);
+    }
+
+    #[test]
+    fn test_editing_url_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_url);
+    }
+
+    #[test]
+    fn test_reset_form_limpa_flags_edicao() {
+        let mut app = App::new();
+        app.editing_technology = true;
+        app.editing_ip = true;
+        app.editing_asn = true;
+        app.editing_url = true;
+        app.editing_item_id = Some("abc".to_string());
+
+        app.reset_form();
+
+        assert!(!app.editing_technology);
+        assert!(!app.editing_ip);
+        assert!(!app.editing_asn);
+        assert!(!app.editing_url);
+        assert!(app.editing_item_id.is_none());
     }
 }
