@@ -313,6 +313,71 @@ fn handle_list_engagements(key: KeyCode, app: &mut App) -> Result<()> {
         return Ok(());
     }
 
+    if app.editing_engagement {
+        match key {
+            KeyCode::Esc => {
+                app.editing_engagement = false;
+                app.reset_form();
+            }
+            KeyCode::Tab => {
+                app.form_next_field();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Nome é obrigatório".to_string());
+                    return Ok(());
+                }
+                let id = match &app.editing_item_id {
+                    Some(id) => id.clone(),
+                    None => return Ok(()),
+                };
+                match db::queries::update_engagement(
+                    app.db.as_ref().unwrap(),
+                    &id,
+                    &app.form_name.trim(),
+                    if app.form_description.trim().is_empty() {
+                        None
+                    } else {
+                        Some(app.form_description.trim())
+                    },
+                ) {
+                    Ok(_) => {
+                        if let Some(db) = &app.db {
+                            app.engagements = db::queries::list_engagements(db).unwrap_or_default();
+                        }
+                        app.editing_engagement = false;
+                        app.reset_form();
+                    }
+                    Err(e) => {
+                        app.form_error = Some(format!("✗ {}", e));
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                match app.form_field {
+                    app::FormField::Name => {
+                        app.form_name.pop();
+                    }
+                    app::FormField::Description => {
+                        app.form_description.pop();
+                    }
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                match app.form_field {
+                    app::FormField::Name => app.form_name.push(c),
+                    app::FormField::Description => app.form_description.push(c),
+                    _ => {}
+                }
+                app.form_error = None;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     match key {
         KeyCode::Esc => {
             app.screen = Screen::Home;
@@ -354,6 +419,16 @@ fn handle_list_engagements(key: KeyCode, app: &mut App) -> Result<()> {
 
                 app.target_selected = 0;
                 app.screen = Screen::Dashboard;
+            }
+        }
+        KeyCode::Char('e') => {
+            if let Some(eng) = app.selected_engagement().cloned() {
+                app.form_name = eng.name.clone();
+                app.form_description = eng.description.clone().unwrap_or_default();
+                app.form_field = app::FormField::Name;
+                app.form_error = None;
+                app.editing_item_id = Some(eng.id.clone());
+                app.editing_engagement = true;
             }
         }
         _ => {}
@@ -520,6 +595,57 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
         return Ok(());
     }
 
+    if app.editing_target {
+        match key {
+            KeyCode::Esc => {
+                app.editing_target = false;
+                app.reset_form();
+            }
+            KeyCode::Enter => {
+                if app.form_name.trim().is_empty() {
+                    app.form_error = Some("Domínio é obrigatório".to_string());
+                    return Ok(());
+                }
+                let id = match &app.editing_item_id {
+                    Some(id) => id.clone(),
+                    None => return Ok(()),
+                };
+                match db::queries::update_target(
+                    app.db.as_ref().unwrap(),
+                    &id,
+                    db::models::UpdateTarget {
+                        domain: app.form_name.trim().to_string(),
+                    },
+                ) {
+                    Ok(_) => {
+                        if let Some(eng) = &app.current_engagement {
+                            let eid = eng.id.clone();
+                            if let Some(db) = &app.db {
+                                app.targets =
+                                    db::queries::list_targets(db, &eid).unwrap_or_default();
+                            }
+                        }
+                        app.editing_target = false;
+                        app.reset_form();
+                    }
+                    Err(e) => {
+                        app.form_error = Some(format!("✗ {}", e));
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                app.form_name.pop();
+                app.form_error = None;
+            }
+            KeyCode::Char(c) => {
+                app.form_name.push(c);
+                app.form_error = None;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
     if app.creating_target {
         match key {
             KeyCode::Esc => {
@@ -596,6 +722,14 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
             KeyCode::Char('d') => {
                 if let Some(target) = app.selected_target() {
                     app.ask_confirm_delete(&target.domain.clone());
+                }
+            }
+            KeyCode::Char('e') => {
+                if let Some(target) = app.selected_target().cloned() {
+                    app.form_name = target.domain.clone();
+                    app.form_error = None;
+                    app.editing_item_id = Some(target.id.clone());
+                    app.editing_target = true;
                 }
             }
             _ => {}

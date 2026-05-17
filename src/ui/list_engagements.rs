@@ -13,14 +13,13 @@ pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // título
-            Constraint::Length(1), // espaço
-            Constraint::Fill(1),   // lista
-            Constraint::Length(1), // dica
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
         ])
         .split(area);
 
-    // Título
     let title = Paragraph::new("── Engagements ──")
         .style(
             Style::default()
@@ -30,7 +29,11 @@ pub fn draw(f: &mut Frame, app: &App) {
         .alignment(Alignment::Center);
     f.render_widget(title, chunks[0]);
 
-    // Lista vazia
+    if app.editing_engagement {
+        draw_edit_form(f, app, chunks[2]);
+        return;
+    }
+
     if app.engagements.is_empty() {
         let empty = Paragraph::new("Nenhum engagement encontrado. Crie um novo na tela inicial.")
             .style(Style::default().fg(Color::DarkGray))
@@ -77,11 +80,81 @@ pub fn draw(f: &mut Frame, app: &App) {
         f.render_stateful_widget(list, center, &mut state);
     }
 
-    // Dica
-    let hint = Paragraph::new("↑↓ navegar  •  Enter abrir  •  D deletar  •  Esc voltar")
+    let hint =
+        Paragraph::new("↑↓ navegar  •  Enter abrir  •  E editar  •  D deletar  •  Esc voltar")
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Center);
+    f.render_widget(hint, chunks[3]);
+}
+
+fn draw_edit_form(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    use crate::app::FormField;
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Fill(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    let center = |a, w| {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Length(w),
+                Constraint::Fill(1),
+            ])
+            .split(a)[1]
+    };
+
+    let name_active = app.form_field == FormField::Name;
+    let name_input = Paragraph::new(app.form_name.as_str())
+        .block(
+            Block::default()
+                .title(" Nome do Engagement ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if name_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(name_input, center(chunks[1], 50));
+
+    let desc_active = app.form_field == FormField::Description;
+    let desc_input = Paragraph::new(app.form_description.as_str())
+        .block(
+            Block::default()
+                .title(" Descrição (opcional) ")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(if desc_active {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(desc_input, center(chunks[3], 50));
+
+    if let Some(err) = &app.form_error {
+        let error_msg = Paragraph::new(format!("✗ {}", err))
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Center);
+        f.render_widget(error_msg, center(chunks[4], 50));
+    }
+
+    let hint = Paragraph::new("Tab alternar campo  •  Enter salvar  •  Esc cancelar")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
-    f.render_widget(hint, chunks[3]);
-
-    crate::ui::draw_confirm_modal(f, app);
+    f.render_widget(hint, chunks[6]);
 }
