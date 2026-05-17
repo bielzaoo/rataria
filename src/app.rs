@@ -137,6 +137,8 @@ pub struct App {
     pub editing_ip: bool,
     pub editing_asn: bool,
     pub editing_url: bool,
+    pub editing_target: bool,
+    pub editing_engagement: bool,
 }
 
 impl App {
@@ -207,6 +209,8 @@ impl App {
             editing_ip: false,
             editing_asn: false,
             editing_url: false,
+            editing_target: false,
+            editing_engagement: false,
         }
     }
 
@@ -247,6 +251,8 @@ impl App {
         self.editing_ip = false;
         self.editing_asn = false;
         self.editing_url = false;
+        self.editing_target = false;
+        self.editing_engagement = false;
     }
 
     /// Alterna entre os campos do formulário
@@ -1577,5 +1583,27 @@ mod tests {
         assert!(!app.editing_asn);
         assert!(!app.editing_url);
         assert!(app.editing_item_id.is_none());
+    }
+
+    #[test]
+    fn test_editing_target_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_target);
+    }
+
+    #[test]
+    fn test_editing_engagement_inicia_false() {
+        let app = App::new();
+        assert!(!app.editing_engagement);
+    }
+
+    #[test]
+    fn test_reset_form_limpa_flags_target_engagement() {
+        let mut app = App::new();
+        app.editing_target = true;
+        app.editing_engagement = true;
+        app.reset_form();
+        assert!(!app.editing_target);
+        assert!(!app.editing_engagement);
     }
 }
