@@ -36,6 +36,17 @@ pub enum ImportField {
     Engagement,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum DashboardIntent {
+    Targets,
+    Subdomains,
+    IPs,
+    ASNs,
+    URLs,
+    Technologies,
+    Screenshots,
+}
+
 pub struct App {
     pub screen: Screen,
     pub db: Option<Database>,
@@ -139,6 +150,8 @@ pub struct App {
     pub editing_url: bool,
     pub editing_target: bool,
     pub editing_engagement: bool,
+
+    pub dashboard_intent: Option<DashboardIntent>,
 }
 
 impl App {
@@ -211,6 +224,7 @@ impl App {
             editing_url: false,
             editing_target: false,
             editing_engagement: false,
+            dashboard_intent: None,
         }
     }
 
@@ -1605,5 +1619,18 @@ mod tests {
         app.reset_form();
         assert!(!app.editing_target);
         assert!(!app.editing_engagement);
+    }
+
+    #[test]
+    fn test_dashboard_intent_inicia_none() {
+        let app = App::new();
+        assert!(app.dashboard_intent.is_none());
+    }
+
+    #[test]
+    fn test_dashboard_intent_pode_ser_definido() {
+        let mut app = App::new();
+        app.dashboard_intent = Some(DashboardIntent::IPs);
+        assert_eq!(app.dashboard_intent, Some(DashboardIntent::IPs));
     }
 }
