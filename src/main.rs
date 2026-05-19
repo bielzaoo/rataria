@@ -472,95 +472,28 @@ fn handle_dashboard(key: KeyCode, app: &mut App) -> Result<()> {
             }
         }
         KeyCode::Enter => {
-            match app.dashboard_selected {
-                0 => {
-                    // Targets
-                    if let Some(eng) = &app.current_engagement {
-                        let eng_id = eng.id.clone();
-                        if let Some(db) = &app.db {
-                            app.targets =
-                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        }
-                    }
-                    app.target_selected = 0;
-                    app.creating_target = false;
-                    app.screen = Screen::Targets;
+            // Define a intenção baseada no item selecionado
+            app.dashboard_intent = Some(match app.dashboard_selected {
+                0 => app::DashboardIntent::Targets,
+                1 => app::DashboardIntent::Subdomains,
+                2 => app::DashboardIntent::IPs,
+                3 => app::DashboardIntent::ASNs,
+                4 => app::DashboardIntent::URLs,
+                5 => app::DashboardIntent::Technologies,
+                6 => app::DashboardIntent::Screenshots,
+                _ => app::DashboardIntent::Targets,
+            });
+
+            // Sempre vai para Targets primeiro para selecionar
+            if let Some(eng) = &app.current_engagement {
+                let eng_id = eng.id.clone();
+                if let Some(db) = &app.db {
+                    app.targets = db::queries::list_targets(db, &eng_id).unwrap_or_default();
                 }
-                1 => {
-                    // Subdomains — vai para targets primeiro para selecionar
-                    if let Some(eng) = &app.current_engagement {
-                        let eng_id = eng.id.clone();
-                        if let Some(db) = &app.db {
-                            app.targets =
-                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        }
-                    }
-                    app.target_selected = 0;
-                    app.creating_target = false;
-                    app.screen = Screen::Targets;
-                }
-                2 => {
-                    // IPs — vai para targets para selecionar o target
-                    if let Some(eng) = &app.current_engagement {
-                        let eng_id = eng.id.clone();
-                        if let Some(db) = &app.db {
-                            app.targets =
-                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        }
-                    }
-                    app.target_selected = 0;
-                    app.screen = Screen::Targets;
-                }
-                3 => {
-                    // ASNs — vai para targets para selecionar o target
-                    if let Some(eng) = &app.current_engagement {
-                        let eng_id = eng.id.clone();
-                        if let Some(db) = &app.db {
-                            app.targets =
-                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        }
-                    }
-                    app.target_selected = 0;
-                    app.screen = Screen::Targets;
-                }
-                4 => {
-                    // URLs — vai para targets → subdomains
-                    if let Some(eng) = &app.current_engagement {
-                        let eng_id = eng.id.clone();
-                        if let Some(db) = &app.db {
-                            app.targets =
-                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        }
-                    }
-                    app.target_selected = 0;
-                    app.screen = Screen::Targets;
-                }
-                5 => {
-                    // Technologies — vai para targets → subdomains
-                    if let Some(eng) = &app.current_engagement {
-                        let eng_id = eng.id.clone();
-                        if let Some(db) = &app.db {
-                            app.targets =
-                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        }
-                    }
-                    app.target_selected = 0;
-                    app.screen = Screen::Targets;
-                }
-                6 => {
-                    // Screenshots — vai para targets → subdomains
-                    if let Some(eng) = &app.current_engagement {
-                        let eng_id = eng.id.clone();
-                        if let Some(db) = &app.db {
-                            app.targets =
-                                db::queries::list_targets(db, &eng_id).unwrap_or_default();
-                        }
-                    }
-                    app.target_selected = 0;
-                    app.screen = Screen::Targets;
-                }
-                _ => {}
             }
+            app.target_selected = 0;
+            app.creating_target = false;
+            app.screen = Screen::Targets;
         }
         _ => {}
     }
@@ -692,6 +625,7 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
     } else {
         match key {
             KeyCode::Esc => {
+                app.dashboard_intent = None;
                 app.screen = Screen::Dashboard;
                 if let Some(eng) = &app.current_engagement {
                     let eng_id = eng.id.clone();
@@ -708,6 +642,7 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
             }
             KeyCode::Enter => {
                 if let Some(target) = app.selected_target().cloned() {
+                    // Carrega dados do target selecionado
                     if let Some(db) = &app.db {
                         app.subdomains =
                             db::queries::list_subdomains(db, &target.id).unwrap_or_default();
@@ -715,8 +650,50 @@ fn handle_targets(key: KeyCode, app: &mut App) -> Result<()> {
                         app.asns = db::queries::list_asns(db, &target.id).unwrap_or_default();
                     }
                     app.current_target = Some(target);
-                    app.target_menu_selected = 0;
-                    app.screen = Screen::TargetMenu;
+
+                    // Navega baseado na intenção do Dashboard
+                    match &app.dashboard_intent {
+                        Some(app::DashboardIntent::Targets) | None => {
+                            app.target_menu_selected = 0;
+                            app.screen = Screen::TargetMenu;
+                        }
+                        Some(app::DashboardIntent::Subdomains) => {
+                            app.subdomain_selected = 0;
+                            app.subdomain_filter = None;
+                            app.creating_subdomain = false;
+                            app.screen = Screen::Subdomains;
+                        }
+                        Some(app::DashboardIntent::IPs) => {
+                            app.ip_selected = 0;
+                            app.creating_ip = false;
+                            app.screen = Screen::IPs;
+                        }
+                        Some(app::DashboardIntent::ASNs) => {
+                            app.asn_selected = 0;
+                            app.creating_asn = false;
+                            app.screen = Screen::ASNs;
+                        }
+                        Some(app::DashboardIntent::URLs) => {
+                            // URLs ficam em SubdomainMenu — vai para Subdomains primeiro
+                            app.subdomain_selected = 0;
+                            app.subdomain_filter = None;
+                            app.creating_subdomain = false;
+                            app.screen = Screen::Subdomains;
+                        }
+                        Some(app::DashboardIntent::Technologies) => {
+                            app.subdomain_selected = 0;
+                            app.subdomain_filter = None;
+                            app.creating_subdomain = false;
+                            app.screen = Screen::Subdomains;
+                        }
+                        Some(app::DashboardIntent::Screenshots) => {
+                            app.subdomain_selected = 0;
+                            app.subdomain_filter = None;
+                            app.creating_subdomain = false;
+                            app.screen = Screen::Subdomains;
+                        }
+                    }
+                    app.dashboard_intent = None; // limpa a intenção após usar
                 }
             }
             KeyCode::Char('d') => {
@@ -1178,7 +1155,7 @@ fn handle_ips(key: KeyCode, app: &mut App) -> Result<()> {
     } else {
         match key {
             KeyCode::Esc => {
-                app.screen = Screen::TargetMenu;
+                app.screen = Screen::Dashboard;
             }
             KeyCode::Down | KeyCode::Char('j') => app.ips_next(),
             KeyCode::Up | KeyCode::Char('k') => app.ips_previous(),
@@ -1367,7 +1344,7 @@ fn handle_asns(key: KeyCode, app: &mut App) -> Result<()> {
     } else {
         match key {
             KeyCode::Esc => {
-                app.screen = Screen::TargetMenu;
+                app.screen = Screen::Dashboard;
             }
             KeyCode::Down | KeyCode::Char('j') => app.asns_next(),
             KeyCode::Up | KeyCode::Char('k') => app.asns_previous(),
